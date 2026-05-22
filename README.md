@@ -7,7 +7,7 @@ Connects any MCP-compatible agent (Claude Desktop, Cursor, ElizaOS, LangChain, O
 ## Quick Start
 
 ```bash
-cd ~/Telegraph-MCP
+cd /path/to/Telegraph-MCP
 
 # 1. Copy and edit .env
 cp .env.example .env
