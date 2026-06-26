@@ -1,79 +1,129 @@
 ---
 name: telegraph
-description: Use Telegraph Protocol for AI inference on Bittensor subnets. Activate when asked for weather forecasts, deepfake detection, LLM inference, image generation, content moderation, signal monitoring (CRYPTO, POLITICS, PHARMA, LAW), or whenever the user wants to route AI tasks through the decentralized Telegraph network. Requires the Telegraph MCP server to be running with a funded USDC wallet.
+description: Use Telegraph Protocol for verified AI inference. Activate when the user asks for: weather forecasts or climate data; deepfake or AI-content detection; LLM completions, image generation, or embeddings via a decentralized network; AI text detection; autonomous signal monitoring across categories like PHARMA, TECHNOLOGY, CLIMATE, HEALTH, ECONOMICS, or GEOPOLITICS; or any task where the user explicitly wants to route inference through the Telegraph network or pay via x402 USDC micropayments. Requires the Telegraph MCP server running with a USDC-funded EVM or Solana wallet.
 ---
 
 # Telegraph Protocol
 
-Telegraph routes AI inference through [Bittensor](https://bittensor.com) subnets via MCP tools. Payments are handled automatically via x402 micropayments — no blockchain interaction needed from the agent.
+Telegraph is a permissionless marketplace for verifiable AI inference. Agents pay USDC per request. Miners — which can be Bittensor subnets, OpenAI, open-source models, or any AI API — compete to supply answers. A decentralized validator mesh grades responses using zkTLS-verified ground truth and WASM scoring scripts, reaches BFT consensus, and delivers a cryptographically finalized result.
 
-## Tool Quick Reference
+The native token is **MACHINA**. Every USDC paid for inference flows through an open-market TWAP to buy MACHINA for the miner — demand for intelligence directly drives demand for the token.
 
-| Task | Tool | Notes |
-|------|------|-------|
-| General AI / auto-routed | `tg_engine_ask` | Engine picks the best subnet |
-| Weather forecast | `tg_engine_ask` | Routes to Zeus SN18 |
-| Direct subnet call | `tg_engine_ask_subnet` | Requires `subnet_id` |
-| Deepfake image detection | `tg_bitmind_detect_image` | Image URL or base64 |
-| Deepfake video detection | `tg_bitmind_detect_video` | Video URL |
-| LLM chat (OpenAI subnet) | `tg_openai_chat` | Direct OpenAI via subnet 102 |
-| Image generation | `tg_openai_images_generate` | DALL-E via subnet 102 |
-| Embeddings | `tg_openai_embed` | OpenAI embeddings |
-| Signal monitoring | `tg_daemon_questions` | Filter by category/source/time |
-| List signal categories | `tg_daemon_categories` | CRYPTO, POLITICS, PHARMA, LAW… |
-| List available subnets | `tg_engine_list_subnets` | Discover what's on the network |
-| Node status | `tg_node_status` | Check node health and chain info |
+---
 
-## How to Use
+## MCP Tool Reference
 
-### Auto-routed inference (recommended for most tasks)
-`tg_engine_ask` picks the best subnet for your query automatically:
+### Free tools (no payment)
+
+| Tool | Purpose |
+|------|---------|
+| `tg_node_list_subnets` | Full subnet catalog — IDs, slugs, endpoints, input/output schemas |
+| `tg_node_subnets_health` | Health status of all subnet integrations |
+| `tg_node_status` | Node identity, public key, chain info |
+| `tg_engine_list_subnets` | Engine's view of available subnets with capabilities and cost |
+| `tg_daemon_categories` | Signal categories in the Daemon database (PHARMA, CLIMATE, TECHNOLOGY, …) |
+| `tg_daemon_questions` | Query cached Daemon signals — filterable by category, source, time, interest |
+| `tg_daemon_health` | Daemon health check |
+
+### Paid tools (x402 USDC per call)
+
+| Tool | Purpose |
+|------|---------|
+| `tg_engine_ask` | Auto-routed inference — Engine's LLM router selects the best miner for your query |
+| `tg_engine_ask_subnet` | Direct inference to a specific subnet by ID |
+| Dynamic tools (auto-discovered) | Per-subnet tools generated from the live integration registry (see below) |
+
+---
+
+## Access Modes
+
+### 1. Auto-routed inference (recommended)
+The Engine classifies your natural language query into an Intent and routes to the highest-ranked miner for that task:
 
 ```
-tg_engine_ask(query="What is the weather forecast for Lahore tomorrow?")
-tg_engine_ask(query="Explain the latest Bitcoin market movement")
-tg_engine_ask(query="Is this image AI-generated?", image_url="https://...")
+tg_engine_ask(query="7-day weather forecast for Dubai")
+tg_engine_ask(query="Is this image AI-generated?")
+tg_engine_ask(query="Summarize the latest clinical trial results for GLP-1 drugs")
 ```
 
-### Direct subnet routing
-Use `tg_engine_ask_subnet` when you need a specific subnet:
-- `subnet_id: "18"` — Zeus (weather forecasting)
-- `subnet_id: "34"` — BitMind (deepfake detection)
-- `subnet_id: "102"` — OpenAI (LLM, images, embeddings)
+The response includes `routing.reasoning` — which subnet was chosen and why.
 
-### Signal monitoring
+### 2. Direct subnet inference
+Route to a specific subnet when you know exactly what you want:
+
+```
+tg_engine_ask_subnet(subnet_id="18", method="GET", endpoint="/predict", payload={lat: 25.2, lon: 55.3, variable: "hourly"})
+tg_engine_ask_subnet(subnet_id="34", method="POST", endpoint="/", payload={image_url: "https://..."})
+tg_engine_ask_subnet(subnet_id="102", method="POST", endpoint="/chat", payload={model: "gpt-4o-mini", messages: [...]})
+```
+
+### 3. Daemon signal feed (free reads)
+The Daemon runs autonomously every 3 hours — collecting data from registered sources (weather APIs, clinical trials, news feeds), routing questions through miners, and caching verified results. Reading these is free:
+
 ```
 tg_daemon_categories()
-# → CRYPTO, POLITICS, PHARMA, LAW, TECHNOLOGY, ...
+# → PHARMA (72), TECHNOLOGY (15), CLIMATE (5), HEALTH (4), ECONOMICS (4), GEOPOLITICS (2), SCIENCE (1)
 
-tg_daemon_questions(category="CRYPTO", limit=10)
-tg_daemon_questions(category="POLITICS", source="twitter", limit=5)
+tg_daemon_questions(category="PHARMA", limit=10)
+tg_daemon_questions(category="CLIMATE", sort="interest", min_interest=5)
+tg_daemon_questions(source="clinicaltrials", since_hours=24)
 ```
 
-### Deepfake detection
-```
-tg_bitmind_detect_image(image_url="https://example.com/photo.jpg")
-# Returns: { is_ai_generated: true/false, confidence: 0.97 }
-```
+### 4. Dynamic subnet tools (auto-discovered)
+On startup, the MCP server fetches the live integration registry and generates per-endpoint tools for every active miner. These update every 5 minutes without restart. Current examples:
+
+| Tool (auto-generated) | Miner | Capability |
+|-----------------------|-------|-----------|
+| `tg_zeus_predict` | SN18 Zeus | Weather forecast |
+| `tg_bitmind_detect_image` | SN34 BitMind | Deepfake image detection |
+| `tg_bitmind_detect_video` | SN34 BitMind | Deepfake video detection |
+| `tg_openai_chat` | OpenAI (SN102) | GPT-4o-mini chat |
+| `tg_openai_images_generate` | OpenAI (SN102) | Image generation |
+| `tg_openai_embed` | OpenAI (SN102) | Text embeddings |
+| `tg_openai_moderate` | OpenAI (SN102) | Content moderation |
+| `tg_apex_generate` | SN1 Apex | Bittensor text generation |
+| `tg_itsai_text_detector_detect` | SN32 ItsAI | AI text detection |
+| `tg_sapling_ai_detector_detect` | SN33 Sapling | AI content detection |
+
+Use `tg_node_list_subnets` to see the current live catalog with full schemas.
+
+---
+
+## Active Intents
+
+The Engine's LLM router maps queries to canonical Intents:
+
+| Category | Intents |
+|----------|---------|
+| Language | `LANGUAGE_GENERATION`, `CHAT_COMPLETION`, `TEXT_GENERATION`, `HIGH_PERFORMANCE_INFERENCE`, `EMBEDDINGS`, `CONTENT_MODERATION` |
+| Weather | `WEATHER_CHECK`, `WEATHER_FORECAST`, `STORM_ALERT`, `WEATHER_RISK_ASSESSMENT` |
+| Vision | `MULTIMODAL_INFERENCE`, `IMAGE_GENERATION`, `TEXT_TO_IMAGE` |
+| Search | `WEB_SEARCH`, `TWITTER_SEARCH`, `NEWS_SEARCH`, `RESEARCH_SYNTHESIS`, `FACT_CHECK` |
+| Authenticity | `DEEPFAKE_DETECTION`, `MEDIA_AUTHENTICITY_CHECK`, `AI_TEXT_DETECTION`, `TEXT_AUTHENTICITY_CHECK`, `IMAGE_VERIFICATION`, `VIDEO_VERIFICATION` |
+| Tasks | `TASK_COMPLETION`, `AGENT_TASK` |
+
+---
 
 ## Payments
 
-All inference calls cost ~$0.01 USDC, charged automatically via x402. The agent never sees the payment flow — tools return results transparently.
+All paid calls use **x402** — an HTTP-native micropayment protocol. The MCP server handles the full flow transparently: receives the 402 challenge, signs the USDC transfer using your configured private key, and retries. The agent never sees the payment step.
 
-- Use a **burner wallet** funded with only the USDC needed
-- Payment is per-call; failed calls are not charged
-- Check wallet balance before bulk operations
+- **Network**: Base Sepolia (testnet) — USDC `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
+- **Typical cost**: $0.01 – $0.05 per inference call
+- **Pricing**: miner's floor price × demand multiplier (1× at current testnet volumes)
+- **Use a burner wallet** — fund with only the USDC you need; never use a main wallet
 
-## Setup (first time)
+---
 
-1. Clone and build the MCP server:
+## Setup
+
+1. Clone and build:
    ```bash
    git clone https://github.com/0xWick/Telegraph-MCP
-   cd Telegraph-MCP
-   npm install && npm run build
+   cd Telegraph-MCP && npm install && npm run build
    ```
 
-2. Configure your MCP client (Claude Desktop, Cursor, etc.):
+2. Add to your MCP client config (Claude Desktop, Cursor, etc.):
    ```json
    {
      "mcpServers": {
@@ -91,8 +141,4 @@ All inference calls cost ~$0.01 USDC, charged automatically via x402. The agent 
    }
    ```
 
-Full integration guides for Claude Desktop, Cursor, ElizaOS, LangChain, Goose, and more are in the [README](https://github.com/0xWick/Telegraph-MCP).
-
-## Dynamic Tool Discovery
-
-Subnet tools auto-update every 5 minutes from the live Telegraph node. New subnets on the network appear automatically — no MCP restart required.
+Full integration guides for Claude Desktop, Cursor, ElizaOS, LangChain, Goose, and others are in the [README](https://github.com/0xWick/Telegraph-MCP#readme).
