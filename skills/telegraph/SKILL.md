@@ -1,6 +1,6 @@
 ---
 name: telegraph
-description: Use Telegraph Protocol for verified AI inference. Activate when the user asks for: weather forecasts or climate data; deepfake or AI-content detection; LLM completions, image generation, or embeddings via a decentralized network; AI text detection; autonomous signal monitoring across categories like POLITICS, TECHNOLOGY, CLIMATE, HEALTH, ECONOMICS, or GEOPOLITICS; or any task where the user explicitly wants to route inference through the Telegraph network or pay via x402 USDC micropayments. Requires the Telegraph MCP server running with a USDC-funded EVM or Solana wallet.
+description: Use Telegraph Protocol for verified AI inference. Activate when the user asks for weather forecasts or climate data; deepfake or AI-content detection; LLM completions, image generation, or embeddings via a decentralized network; AI text detection; autonomous signal monitoring across categories like POLITICS, TECHNOLOGY, CLIMATE, HEALTH, ECONOMICS, or GEOPOLITICS; or any task where the user explicitly wants to route inference through the Telegraph network or pay via x402 USDC micropayments. Requires the Telegraph MCP server running with a USDC-funded EVM or Solana wallet.
 license: MIT
 metadata:
   version: 1.0.0
