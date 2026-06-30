@@ -320,7 +320,7 @@ The server uses **MCP stdio transport** — the standard for local MCP servers. 
   "mcpServers": {
     "telegraph": {
       "command": "node",
-      "args": ["/path/to/Telegraph-MCP/dist/index.js"],
+      "args": ["/path/to/telegraph-mcp/dist/index.js"],
       "env": {
         "TELEGRAPH_NODE_URL": "http://13.237.89.59:7044",
         "TELEGRAPH_ENGINE_URL": "http://13.237.89.59:8080",
