@@ -8,6 +8,18 @@ Connects any MCP-compatible agent (Claude Desktop, Cursor, ElizaOS, LangChain, O
 
 ## Quick Start
 
+### Option A — npx (no clone, recommended once published)
+
+```bash
+TELEGRAPH_NODE_URL=http://13.237.89.59:7044 \
+TELEGRAPH_ENGINE_URL=http://13.237.89.59:8080 \
+TELEGRAPH_DAEMON_URL=http://13.237.89.59:8081 \
+TELEGRAPH_EVM_PRIVATE_KEY=0xyour_key_here \
+npx -y telegraph-protocol-mcp
+```
+
+### Option B — from source
+
 ```bash
 # 1. Clone and enter
 git clone https://github.com/telegraphprotocol/telegraph-mcp
@@ -23,6 +35,8 @@ npm install && npm run build
 # 4. Run
 npm start
 ```
+
+> Published to npm as [`telegraph-protocol-mcp`](https://www.npmjs.com/package/telegraph-protocol-mcp) and listed on the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.telegraphprotocol/telegraph`. Maintainers: see [PUBLISHING.md](./PUBLISHING.md).
 
 ## Architecture
 
@@ -119,7 +133,28 @@ When an agent calls a paid tool (e.g., `tg_engine_ask`):
 
 ### Claude Desktop
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows).
+
+Using npx (simplest — no clone or build):
+
+```json
+{
+  "mcpServers": {
+    "telegraph": {
+      "command": "npx",
+      "args": ["-y", "telegraph-protocol-mcp"],
+      "env": {
+        "TELEGRAPH_NODE_URL": "http://13.237.89.59:7044",
+        "TELEGRAPH_ENGINE_URL": "http://13.237.89.59:8080",
+        "TELEGRAPH_DAEMON_URL": "http://13.237.89.59:8081",
+        "TELEGRAPH_EVM_PRIVATE_KEY": "0xyour_key_here"
+      }
+    }
+  }
+}
+```
+
+Or pointing at a local build:
 
 ```json
 {

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "Telegraph Protocol",
+      "description": "Verifiable decentralized AI inference — weather, deepfake/AI-content detection, LLMs, embeddings, and autonomous signal monitoring — paid per call via x402 USDC micropayments through the Telegraph MCP server.",
+      "skills": [
+        "telegraph"
+      ]
+    }
+  ]
+}
