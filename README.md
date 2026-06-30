@@ -2,21 +2,25 @@
 
 MCP server exposing [Telegraph Protocol](https://github.com/telegraphprotocol/Telegraph) AI inference APIs as tools with automatic x402 micropayments.
 
-Connects any MCP-compatible agent (Claude Desktop, Cursor, ElizaOS, LangChain, OpenClaw, Goose, etc.) to Bittensor subnets — weather forecasting, deepfake detection, LLM inference, signal monitoring — with zero crypto code in the agent. The MCP server handles private key custody, payment signing, and transaction settlement internally.
+Connects any MCP-compatible agent (Claude Desktop, Cursor, ElizaOS, LangChain, OpenClaw, Goose, etc.) to Telegraph's network of AI miners — weather forecasting, deepfake detection, LLM inference, AI-text detection, signal monitoring — with zero crypto code in the agent. The MCP server handles private key custody, payment signing, and transaction settlement internally.
+
+> Miners can be Bittensor subnets, hosted models, or any private API integrated via YAML. Some tool and field names still say `subnet` for legacy reasons — read it as "miner".
 
 ## Quick Start
 
 ```bash
-cd ~/Telegraph-MCP
+# 1. Clone and enter
+git clone https://github.com/telegraphprotocol/telegraph-mcp
+cd telegraph-mcp
 
-# 1. Copy and edit .env
+# 2. Copy and edit .env
 cp .env.example .env
 # Edit: set TELEGRAPH_EVM_PRIVATE_KEY=0xyour_key_here
 
-# 2. Install and build
+# 3. Install and build
 npm install && npm run build
 
-# 3. Run
+# 4. Run
 npm start
 ```
 
@@ -58,7 +62,7 @@ All via environment variables (`.env` file or inline):
 | `TELEGRAPH_SOLANA_PRIVATE_KEY` | No* | — | Solana private key (base58) |
 | `EVM_NETWORK` | No | `eip155:*` | EVM CAIP-2 network |
 | `SVM_NETWORK` | No | `solana:*` | Solana CAIP-2 network |
-| `REFRESH_INTERVAL_MS` | No | `300000` | Subnet refresh interval (ms). 0 to disable. |
+| `REFRESH_INTERVAL_MS` | No | `300000` | Miner-tool refresh interval (ms). 0 to disable. |
 
 *At least one private key required.
 
@@ -68,33 +72,37 @@ All via environment variables (`.env` file or inline):
 | Tool | Description |
 |------|-------------|
 | `tg_node_status` | Node status, public key, chain info |
-| `tg_node_subnets_health` | Subnet integration health check |
-| `tg_node_list_subnets` | Full subnet catalog with metadata, schemas, endpoints |
+| `tg_node_subnets_health` | Miner integration health check |
+| `tg_node_list_subnets` | Full miner catalog with metadata, schemas, endpoints |
 
 ### Engine Tools
 | Tool | Payment | Description |
 |------|---------|-------------|
-| `tg_engine_list_subnets` | Free | List available inference subnets |
-| `tg_engine_ask` | x402 | Auto-routed inference (LLM picks best subnet for your query) |
-| `tg_engine_ask_subnet` | x402 | Direct inference through a specific subnet by ID |
+| `tg_engine_list_subnets` | Free | List the miners the Engine can route to |
+| `tg_engine_ask` | x402 | Auto-routed inference (LLM picks the best miner for your query) |
+| `tg_engine_ask_subnet` | x402 | Direct inference through a specific miner by ID |
 
 ### Daemon Tools (no payment)
 | Tool | Description |
 |------|-------------|
 | `tg_daemon_health` | Daemon health check |
-| `tg_daemon_categories` | Signal categories (POLITICS, CRYPTO, PHARMA, LAW, etc.) |
+| `tg_daemon_categories` | Signal categories (POLITICS, ECONOMICS, TECHNOLOGY, CLIMATE, HEALTH, CRYPTO, SPORTS, …) |
 | `tg_daemon_questions` | Query collected signals with filters (category, source, time, interest) |
 
-### Dynamic Subnet Tools (auto-discovered, x402 payment)
-Tools for each subnet endpoint are auto-generated from the Telegraph node's live integration registry. Current subnets on production:
+### Dynamic Miner Tools (auto-discovered, x402 payment)
+Tools for each miner endpoint are auto-generated from the Telegraph node's live integration registry. The live set changes on-chain, so treat this as a snapshot, not the source of truth (call `tg_node_list_subnets` for the current catalog):
 
-| Subnet | Tools |
+| Miner | Tools |
 |--------|-------|
-| **Zeus SN18** (Weather) | `tg_zeus_predict` |
-| **BitMind SN34** (Deepfake) | `tg_bitmind_detect_image`, `tg_bitmind_detect_video`, `tg_bitmind_preprocess_video`, `tg_bitmind_get_video_upload_url` |
-| **OpenAI** (LLM/Images) | `tg_openai_chat`, `tg_openai_responses`, `tg_openai_embed`, `tg_openai_images_generate`, `tg_openai_moderate` |
+| **Zeus (18)** — Weather | `tg_zeus_predict` |
+| **ItsAI (32)** — AI text detection | `tg_itsai_text_detector_detect` |
+| **Sapling (33)** — AI content detection | `tg_sapling_ai_detector_detect` |
+| **BitMind (34)** — Deepfake | `tg_bitmind_detect_image`, `tg_bitmind_detect_video`, `tg_bitmind_preprocess_video`, `tg_bitmind_get_video_upload_url` |
+| **OpenAI (102)** — LLM / images | `tg_openai_chat`, `tg_openai_responses`, `tg_openai_embed`, `tg_openai_images_generate`, `tg_openai_moderate` |
 
-**These update automatically.** New subnets registered on-chain appear within 5 minutes. Removed subnets are cleaned up. The agent always sees only currently valid tools.
+**These update automatically.** New miners registered on-chain appear within 5 minutes. Deregistered miners are cleaned up. The agent always sees only currently valid tools.
+
+> Some tool and field names contain `subnet` for legacy reasons — Telegraph began by integrating Bittensor subnets. Today a **miner** is any provider integrated via YAML, subnet or not.
 
 ## How x402 Payments Work
 
@@ -118,7 +126,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
   "mcpServers": {
     "telegraph": {
       "command": "node",
-      "args": ["/home/wick/Telegraph-MCP/dist/index.js"],
+      "args": ["/path/to/telegraph-mcp/dist/index.js"],
       "env": {
         "TELEGRAPH_NODE_URL": "http://13.237.89.59:7044",
         "TELEGRAPH_ENGINE_URL": "http://13.237.89.59:8080",
@@ -141,7 +149,7 @@ Add to Cursor Settings → MCP → Add new MCP server:
   "mcpServers": {
     "telegraph": {
       "command": "node",
-      "args": ["/home/wick/Telegraph-MCP/dist/index.js"],
+      "args": ["/path/to/telegraph-mcp/dist/index.js"],
       "env": {
         "TELEGRAPH_NODE_URL": "http://13.237.89.59:7044",
         "TELEGRAPH_ENGINE_URL": "http://13.237.89.59:8080",
@@ -162,7 +170,7 @@ In your Eliza character file or MCP plugin config:
   "mcp": {
     "telegraph": {
       "command": "node",
-      "args": ["/home/wick/Telegraph-MCP/dist/index.js"],
+      "args": ["/path/to/telegraph-mcp/dist/index.js"],
       "env": {
         "TELEGRAPH_NODE_URL": "http://13.237.89.59:7044",
         "TELEGRAPH_ENGINE_URL": "http://13.237.89.59:8080",
@@ -196,7 +204,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 client = MultiServerMCPClient({
     "telegraph": {
         "command": "node",
-        "args": ["/home/wick/Telegraph-MCP/dist/index.js"],
+        "args": ["/path/to/telegraph-mcp/dist/index.js"],
         "env": {
             "TELEGRAPH_NODE_URL": "http://13.237.89.59:7044",
             "TELEGRAPH_ENGINE_URL": "http://13.237.89.59:8080",
@@ -223,7 +231,7 @@ import { MultiServerMCPClient } from "@langchain/mcp-adapters";
 const client = new MultiServerMCPClient({
   telegraph: {
     command: "node",
-    args: ["/home/wick/Telegraph-MCP/dist/index.js"],
+    args: ["/path/to/telegraph-mcp/dist/index.js"],
     env: {
       TELEGRAPH_NODE_URL: "http://13.237.89.59:7044",
       TELEGRAPH_ENGINE_URL: "http://13.237.89.59:8080",
@@ -247,7 +255,7 @@ OpenClaw natively supports MCP via configuration. Add to `openclaw.config.json`:
     "telegraph": {
       "type": "stdio",
       "command": "node",
-      "args": ["/home/wick/Telegraph-MCP/dist/index.js"],
+      "args": ["/path/to/telegraph-mcp/dist/index.js"],
       "env": {
         "TELEGRAPH_NODE_URL": "http://13.237.89.59:7044",
         "TELEGRAPH_ENGINE_URL": "http://13.237.89.59:8080",
@@ -269,7 +277,7 @@ extensions:
     type: mcp
     command: node
     args:
-      - /home/wick/Telegraph-MCP/dist/index.js
+      - /path/to/telegraph-mcp/dist/index.js
     env:
       TELEGRAPH_NODE_URL: http://13.237.89.59:7044
       TELEGRAPH_ENGINE_URL: http://13.237.89.59:8080
@@ -289,7 +297,7 @@ In Continue's `config.json`:
         "transport": {
           "type": "stdio",
           "command": "node",
-          "args": ["/home/wick/Telegraph-MCP/dist/index.js"],
+          "args": ["/path/to/telegraph-mcp/dist/index.js"],
           "env": {
             "TELEGRAPH_NODE_URL": "http://13.237.89.59:7044",
             "TELEGRAPH_ENGINE_URL": "http://13.237.89.59:8080",

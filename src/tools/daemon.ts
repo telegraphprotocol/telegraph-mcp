@@ -29,7 +29,7 @@ export function registerDaemonTools(server: McpServer, config: TelegraphConfig):
   server.registerTool(
     "tg_daemon_categories",
     {
-      description: "List all signal categories tracked by the Telegraph Daemon. Shows category name, question count, and average interest score. Includes categories like POLITICS, ECONOMICS, TECHNOLOGY, HEALTH, CRYPTO, PHARMA, LAW, etc. No payment required.",
+      description: "List all signal categories tracked by the Telegraph Daemon. Shows category name, question count, and average interest score. Categories include POLITICS, ECONOMICS, GEOPOLITICS, TECHNOLOGY, CLIMATE, HEALTH, FINANCE, CRYPTO, SPORTS, SCIENCE, SOCIAL, OTHER. No payment required.",
       inputSchema: z.object({}),
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
@@ -53,7 +53,7 @@ export function registerDaemonTools(server: McpServer, config: TelegraphConfig):
     {
       description: "Query Telegraph Daemon-collected signals and questions. Supports filtering by category, source, sort order, time range, minimum interest score. Returns questions with their metadata, results, and interest scores. No payment required.",
       inputSchema: z.object({
-        category: z.string().optional().describe("Filter by category (e.g., CRYPTO, TECHNOLOGY, PHARMA, LAW)"),
+        category: z.string().optional().describe("Filter by category (e.g., CRYPTO, TECHNOLOGY, CLIMATE, HEALTH, POLITICS)"),
         source: z.string().optional().describe("Filter by data source (e.g., reddit, polymarket, gdelt)"),
         sort: z.enum(["interest", "timestamp"]).optional().describe("Sort order (default: timestamp)"),
         since_hours: z.number().optional().describe("Only return results from the last N hours"),
