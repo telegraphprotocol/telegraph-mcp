@@ -2,11 +2,16 @@
 name: telegraph
 description: Use Telegraph Protocol for verified AI inference. Activate when the user asks for weather forecasts or climate data; deepfake or AI-content detection; LLM completions, image generation, or embeddings via a decentralized network; AI text detection; autonomous signal monitoring across categories like POLITICS, TECHNOLOGY, CLIMATE, HEALTH, ECONOMICS, or GEOPOLITICS; or any task where the user explicitly wants to route inference through the Telegraph network or pay via x402 USDC micropayments. Requires the Telegraph MCP server running with a USDC-funded EVM or Solana wallet.
 license: MIT
+homepage: https://github.com/telegraphprotocol/telegraph-mcp
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   homepage: https://github.com/telegraphprotocol/telegraph-mcp
   documentation: https://docs.telegraphprotocol.com
   keywords: [ai-inference, x402, bittensor, mcp, usdc, deepfake-detection, weather, llm, web3, agent-payments]
+  openclaw:
+    emoji: "📡"
+    requires:
+      config: ["mcpServers.telegraph"]
 ---
 
 # Telegraph Protocol
@@ -119,33 +124,31 @@ All paid calls use **x402** — an HTTP-native micropayment protocol. The MCP se
 - **Typical cost**: $0.01 – $0.05 per inference call
 - **Pricing**: miner's floor price × demand multiplier (rises with 24h request volume for the Intent)
 - **Use a burner wallet** — fund with only the USDC you need; never use a main wallet
+- **Key custody**: the private key lives only in the local MCP server's process environment. It is never sent to the model, never appears in tool inputs or outputs, and never leaves the machine — only signed x402 payment authorizations do.
 
 ---
 
 ## Setup
 
-1. Clone and build:
-   ```bash
-   git clone https://github.com/telegraphprotocol/telegraph-mcp
-   cd telegraph-mcp && npm install && npm run build
-   ```
+Add the server to your MCP client config — no clone or build needed; it runs straight from npm:
 
-2. Add to your MCP client config (Claude Desktop, Cursor, etc.):
-   ```json
-   {
-     "mcpServers": {
-       "telegraph": {
-         "command": "node",
-         "args": ["/path/to/Telegraph-MCP/dist/index.js"],
-         "env": {
-           "TELEGRAPH_NODE_URL": "http://13.237.89.59:7044",
-           "TELEGRAPH_ENGINE_URL": "http://13.237.89.59:8080",
-           "TELEGRAPH_DAEMON_URL": "http://13.237.89.59:8081",
-           "TELEGRAPH_EVM_PRIVATE_KEY": "0xyour_burner_wallet_key"
-         }
-       }
-     }
-   }
-   ```
+```json
+{
+  "mcpServers": {
+    "telegraph": {
+      "command": "npx",
+      "args": ["-y", "telegraph-protocol-mcp"],
+      "env": {
+        "TELEGRAPH_NODE_URL": "http://13.237.89.59:7044",
+        "TELEGRAPH_ENGINE_URL": "http://13.237.89.59:8080",
+        "TELEGRAPH_DAEMON_URL": "http://13.237.89.59:8081",
+        "TELEGRAPH_EVM_PRIVATE_KEY": "0xyour_burner_wallet_key"
+      }
+    }
+  }
+}
+```
+
+Config file locations: Claude Desktop `claude_desktop_config.json` · Cursor MCP settings · OpenClaw `~/.openclaw/openclaw.json`. On OpenClaw this skill gates on the `mcpServers.telegraph` config entry — it stays dormant (zero prompt overhead) until the server above is configured.
 
 Full integration guides for Claude Desktop, Cursor, ElizaOS, LangChain, Goose, and others are in the [README](https://github.com/telegraphprotocol/telegraph-mcp#readme).

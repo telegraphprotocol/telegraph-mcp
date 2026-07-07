@@ -12,7 +12,7 @@ Each example is self-contained with its own `package.json` / `requirements.txt`,
 | **Pure MCP** | [`pure-mcp/`](./pure-mcp/) | Python script | ✅ Tested | Raw MCP SDK test — validates server for any client |
 | **Claude Desktop** | [`claude/`](./claude/) | Config | ✅ Ready | `claude_desktop_config.json` — copy to Claude settings |
 | **Cursor** | [`cursor/`](./cursor/) | Config | ✅ Ready | `cursor_mcp_config.json` — paste into Cursor MCP settings |
-| **OpenClaw** | [`openclaw/`](./openclaw/) | Config | ✅ Ready | `openclaw.config.json` — merge into OpenClaw project |
+| **OpenClaw** | [`openclaw/`](./openclaw/) | Config + Skill | ✅ Ready | npx `mcpServers` entry for `~/.openclaw/openclaw.json` + config-gated skill ([`skills/telegraph`](../skills/telegraph/)) |
 | **Goose** | [`goose/`](./goose/) | Config | ✅ Ready | `config.yaml` — copy to `~/.config/goose/` |
 | **VS Code Continue** | [`vscode-continue/`](./vscode-continue/) | Config | ✅ Ready | `config.json` — merge into Continue settings |
 | **ElizaOS** | [`elizaos-telegraph/`](./elizaos-telegraph/) | TypeScript | ✅ Tested | Full agent with `@elizaos/plugin-mcp`. 19 tools loaded, x402 working. |
