@@ -1,5 +1,5 @@
 {
-  "name": "telegraph-protocol-mcp",
+  "name": "@telegraphprotocol/telegraph-protocol-mcp",
   "version": "1.0.0",
   "description": "MCP server exposing Telegraph Protocol AI miners (weather, deepfake detection, LLMs, AI-text detection, signals) as tools with automatic x402 USDC micropayments",
   "mcpName": "io.github.telegraphprotocol/telegraph",
