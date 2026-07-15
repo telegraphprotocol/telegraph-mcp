@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- `@telegraph/plugin-elizaos` published to npm (MIT license, scoped under `@telegraph`)
+- `@telegraphprotocol/plugin-elizaos` published to npm (MIT license, scoped under `@telegraph`)
 - Plugin has `elizaos` and `elizaos-plugin` in its `package.json` keywords (auto-discoverable)
 - Registered in the ElizaOS plugin registry for curated listing
 
@@ -18,7 +18,7 @@ npm publish --access public
 After publish, verify:
 
 ```bash
-npm info @telegraph/plugin-elizaos
+npm info @telegraphprotocol/plugin-elizaos
 ```
 
 and confirm `elizaos` appears in keywords.
@@ -33,7 +33,7 @@ Add this JSON file to `packages/registry/entries/third-party/telegraph-plugin-el
 
 ```json
 {
-  "package": "@telegraph/plugin-elizaos",
+  "package": "@telegraphprotocol/plugin-elizaos",
   "repository": "github:telegraphprotocol/telegraph-mcp",
   "kind": "plugin",
   "description": "Telegraph Protocol — decentralized AI inference (weather, deepfake detection, LLMs, signal feeds) with x402 USDC micropayments",
@@ -63,7 +63,7 @@ Open a PR against `elizaOS/eliza` with:
 ### Ready-to-paste PR body
 
 ```markdown
-Title: feat(registry): add @telegraph/plugin-elizaos
+Title: feat(registry): add @telegraphprotocol/plugin-elizaos
 
 ## What
 
@@ -71,7 +71,7 @@ Adds the Telegraph Protocol plugin for ElizaOS.
 
 ## Plugin
 
-- **Package**: `@telegraph/plugin-elizaos` v1.0.0
+- **Package**: `@telegraphprotocol/plugin-elizaos` v1.0.0
 - **Repo**: https://github.com/telegraphprotocol/telegraph-mcp/tree/main/packages/plugin-elizaos
 - **License**: MIT
 - **Type**: plugin
@@ -92,7 +92,7 @@ Payments use x402 USDC micropayments ($0.01–$0.05 per call). Free tools work w
 ```json
 // character.json
 {
-  "plugins": ["@telegraph/plugin-elizaos"],
+  "plugins": ["@telegraphprotocol/plugin-elizaos"],
   "settings": {
     "secrets": {
       "TELEGRAPH_EVM_PRIVATE_KEY": "0x..."

@@ -12,7 +12,7 @@ ElizaOS plugin for the **Telegraph Protocol** — a permissionless marketplace f
 ## Install
 
 ```bash
-npm install @telegraph/plugin-elizaos
+npm install @telegraphprotocol/plugin-elizaos
 ```
 
 ## Setup
@@ -22,7 +22,7 @@ Add to your ElizaOS character config:
 ```json
 {
   "name": "my-agent",
-  "plugins": ["@telegraph/plugin-elizaos"],
+      "plugins": ["@telegraphprotocol/plugin-elizaos"],
   "settings": {
     "secrets": {
       "TELEGRAPH_EVM_PRIVATE_KEY": "0xyour_burner_wallet_key"
@@ -54,7 +54,7 @@ Paid calls use **x402** — an HTTP-native micropayment protocol. The plugin cal
 ```
 ElizaOS Agent
   │
-  │ @telegraph/plugin-elizaos
+  │ @telegraphprotocol/plugin-elizaos
   │
   ├── TELEGRAPH_ASK → Engine /v1/ask (x402 paid)
   ├── TELEGRAPH_LIST_MINERS → Node /miner-dispatcher/integrations (free)
