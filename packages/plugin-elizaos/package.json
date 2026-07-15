@@ -1,5 +1,5 @@
 {
-  "name": "@telegraphprotocol/plugin-elizaos",
+  "name": "telegraph-plugin-elizaos",
   "version": "1.0.0",
   "description": "ElizaOS plugin for Telegraph Protocol — decentralized AI inference with x402 USDC micropayments (weather, deepfake detection, LLMs, signal feeds)",
   "type": "module",
