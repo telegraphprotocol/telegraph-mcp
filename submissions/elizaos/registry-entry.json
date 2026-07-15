@@ -1,0 +1,10 @@
+{
+  "package": "@telegraph/plugin-elizaos",
+  "repository": "github:telegraphprotocol/telegraph-mcp",
+  "kind": "plugin",
+  "description": "Telegraph Protocol — decentralized AI inference (weather, deepfake detection, LLMs, signal feeds) with x402 USDC micropayments",
+  "homepage": "https://github.com/telegraphprotocol/telegraph-mcp/tree/main/packages/plugin-elizaos",
+  "version": "1.0.0",
+  "directory": "packages/plugin-elizaos",
+  "tags": ["ai-inference", "deepfake-detection", "weather", "llm", "x402", "mcp", "web3", "agent-payments"]
+}
