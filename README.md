@@ -6,6 +6,13 @@ Connects any MCP-compatible agent (Claude Desktop, Cursor, ElizaOS, LangChain, O
 
 > Miners can be Bittensor subnets, hosted models, or any private API integrated via YAML. Some tool and field names still say `subnet` for legacy reasons — read it as "miner".
 
+## Documentation
+
+| Document | Description |
+|---|---|
+| [Architecture](docs/architecture.md) | MCP protocol, tool categories, x402 auto-payment, client integrations |
+| [Troubleshooting](docs/troubleshooting.md) | Common issues and solutions |
+
 ## Quick Start
 
 ### Option A — npx (no clone, recommended once published)
