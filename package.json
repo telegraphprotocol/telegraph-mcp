@@ -1,7 +1,7 @@
 {
   "name": "@telegraphprotocol/telegraph-protocol-mcp",
-  "version": "1.0.0",
-  "description": "MCP server exposing Telegraph Protocol AI miners (weather, deepfake detection, LLMs, AI-text detection, signals) as tools with automatic x402 USDC micropayments",
+  "version": "2.0.0",
+  "description": "MCP server for the Telegraph network: ask ranked miners (prices, FX, weather, search, security, code review and 100+ intents), browse intents, miners and rankings, and pay from escrow or by x402 in USDC",
   "mcpName": "io.github.telegraphprotocol/telegraph",
   "main": "dist/index.js",
   "bin": {
@@ -21,18 +21,18 @@
     "mcp",
     "model-context-protocol",
     "telegraph",
-    "ai-inference",
+    "ai-agents",
     "x402",
-    "bittensor",
+    "escrow",
     "usdc",
     "agent-payments",
-    "deepfake-detection",
-    "weather",
-    "llm",
+    "miners",
+    "ranking",
     "web3"
   ],
   "files": [
     "dist",
+    "guides",
     "README.md",
     ".agents"
   ],
@@ -50,13 +50,9 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@x402/fetch": "^2.11.0",
     "@x402/evm": "^2.11.0",
-    "@x402/svm": "^2.11.0",
     "@x402/core": "^2.11.0",
     "viem": "^2.21.0",
-    "@solana/kit": "^6.0.0",
-    "@scure/base": "^1.1.0",
-    "zod": "^3.25.0",
-    "dotenv": "^16.4.0"
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

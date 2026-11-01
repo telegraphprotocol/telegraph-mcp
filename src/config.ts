@@ -1,32 +1,41 @@
-import type { TelegraphConfig } from "./types.js";
+export type PaymentMode = "auto" | "escrow" | "x402";
 
-export function loadConfig(): TelegraphConfig {
-  const evmKey = process.env.TELEGRAPH_EVM_PRIVATE_KEY;
-  const svmKey = process.env.TELEGRAPH_SOLANA_PRIVATE_KEY;
+export interface Config {
+  url: string; // the node's public base URL
+  privateKey?: `0x${string}`;
+  payment: PaymentMode;
+  diamond: `0x${string}`;
+  chainId: number;
+  rpcUrl: string;
+}
 
-  if (!evmKey && !svmKey) {
-    throw new Error(
-      "At least one private key is required. Set TELEGRAPH_EVM_PRIVATE_KEY or TELEGRAPH_SOLANA_PRIVATE_KEY."
-    );
+// Telegraph beta 2 on Ethereum Sepolia: the default network, so the server
+// works with no settings at all.
+const DEFAULTS = {
+  url: "http://13.237.89.59:7148",
+  diamond: "0x3624EB012B5E998BB57B6bE6C9Cfc9c4bc5eb99b",
+  chainId: 11155111,
+  rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
+};
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  // TELEGRAPH_EVM_PRIVATE_KEY is the v1 name, still accepted.
+  const key = (env.TELEGRAPH_PRIVATE_KEY || env.TELEGRAPH_EVM_PRIVATE_KEY || "").trim();
+  if (key && !/^0x[0-9a-fA-F]{64}$/.test(key)) {
+    throw new Error("TELEGRAPH_PRIVATE_KEY must be a 0x-prefixed 32-byte hex private key");
   }
-
-  const nodePort = process.env.NODE_PORT || "7044";
-  const enginePort = process.env.ENGINE_PORT || "8080";
-  const daemonPort = process.env.DAEMON_PORT || "8081";
-
-  const nodeUrl = process.env.TELEGRAPH_NODE_URL || `http://localhost:${nodePort}`;
-  const engineUrl = process.env.TELEGRAPH_ENGINE_URL || `http://localhost:${enginePort}`;
-  const daemonUrl = process.env.TELEGRAPH_DAEMON_URL || `http://localhost:${daemonPort}`;
-
+  const payment = (env.TELEGRAPH_PAYMENT || "auto").toLowerCase();
+  if (payment !== "auto" && payment !== "escrow" && payment !== "x402") {
+    throw new Error("TELEGRAPH_PAYMENT must be auto, escrow or x402");
+  }
+  const diamond = env.TELEGRAPH_DIAMOND || DEFAULTS.diamond;
+  if (!/^0x[0-9a-fA-F]{40}$/.test(diamond)) throw new Error("TELEGRAPH_DIAMOND must be an address");
   return {
-    nodeUrl: nodeUrl.replace(/\/$/, ""),
-    engineUrl: engineUrl.replace(/\/$/, ""),
-    daemonUrl: daemonUrl.replace(/\/$/, ""),
-    evmPrivateKey: evmKey,
-    solanaPrivateKey: svmKey,
-    evmNetwork: (process.env.EVM_NETWORK || "eip155:*") as `${string}:${string}`,
-    svmNetwork: (process.env.SVM_NETWORK || "solana:*") as `${string}:${string}`,
-    refreshIntervalMs: parseInt(process.env.REFRESH_INTERVAL_MS || "300000", 10),
-    transport: "stdio",
+    url: (env.TELEGRAPH_URL || DEFAULTS.url).replace(/\/+$/, ""),
+    privateKey: key ? (key as `0x${string}`) : undefined,
+    payment,
+    diamond: diamond as `0x${string}`,
+    chainId: Number(env.TELEGRAPH_CHAIN_ID || DEFAULTS.chainId),
+    rpcUrl: env.TELEGRAPH_RPC_URL || DEFAULTS.rpcUrl,
   };
 }
