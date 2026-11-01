@@ -4,7 +4,7 @@
   "groupings": [
     {
       "title": "Telegraph Protocol",
-      "description": "Verifiable decentralized AI inference — weather, deepfake/AI-content detection, LLMs, embeddings, and autonomous signal monitoring — paid per call via x402 USDC micropayments through the Telegraph MCP server.",
+      "description": "Ask the Telegraph network's ranked miners (prices, FX, weather, search, security, code review and 100+ intents), browse intents, miners and rankings, and pay per ask in USDC (escrow first, then x402) through the Telegraph MCP server.",
       "skills": [
         "telegraph"
       ]

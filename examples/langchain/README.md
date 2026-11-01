@@ -18,7 +18,7 @@ pip install -r requirements.txt
 
 # 3. Configure
 cp .env.example .env
-# Edit: set TELEGRAPH_EVM_PRIVATE_KEY (must be funded with USDC)
+# Edit: set TELEGRAPH_PRIVATE_KEY (a wallet with USDC on the Telegraph network)
 
 # 4. Run the agent test
 python agent.py
@@ -28,15 +28,15 @@ python agent.py
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `TELEGRAPH_EVM_PRIVATE_KEY` | Yes | EVM private key for x402 payments |
+| `TELEGRAPH_PRIVATE_KEY` | For paid asks | Wallet that pays (escrow first, then x402) |
 | `OPENAI_API_KEY` | No | OpenAI key (optional, for agent LLM) |
 
 ## What the test script does
 
 1. Connects to Telegraph MCP server via stdio
 2. Lists all available Telegraph tools
-3. Tests free tools: `tg_daemon_health`, `tg_engine_list_subnets`, `tg_daemon_categories`
-4. Tests x402-paid tools: `tg_engine_ask` (requires funded private key)
+3. Tests free tools: `telegraph_find_intents`, `telegraph_ranking`, `telegraph_docs`
+4. Tests a paid ask: `telegraph_ask` (needs `TELEGRAPH_PRIVATE_KEY`)
 
 ## Using with a LangChain Agent
 
@@ -50,10 +50,7 @@ client = MultiServerMCPClient({
         "command": "node",
         "args": ["/path/to/telegraph-mcp/dist/index.js"],
         "env": {
-            "TELEGRAPH_NODE_URL": "http://13.237.89.59:7044",
-            "TELEGRAPH_ENGINE_URL": "http://13.237.89.59:8080",
-            "TELEGRAPH_DAEMON_URL": "http://13.237.89.59:8081",
-            "TELEGRAPH_EVM_PRIVATE_KEY": "0xyour_key",
+            "TELEGRAPH_PRIVATE_KEY": "0xyour_key",
         },
     }
 })

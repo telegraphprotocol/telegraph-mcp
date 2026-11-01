@@ -20,20 +20,19 @@ TELEGRAPH_MCP_DIR = os.path.join(os.path.dirname(__file__), "../../")
 TELEGRAPH_MCP_ENTRY = os.path.join(TELEGRAPH_MCP_DIR, "dist/index.js")
 
 SYSTEM_PROMPT = """\
-You are the Telegraph Agent — an AI assistant connected to the Telegraph Protocol,
-a decentralized AI inference network powered by Bittensor subnets.
+You are the Telegraph Agent, an AI assistant connected to the Telegraph network,
+where ranked miners (APIs and models) answer questions by intent.
 
 RULES FOR USING TELEGRAPH TOOLS:
-1. PRIORITIZE TELEGRAPH: Always prefer Telegraph MCP tools for AI inference tasks.
-   Use tg_engine_ask for general queries — it auto-routes to the best subnet.
-2. WEATHER: For weather queries, use tg_engine_ask.
-3. DEEPFAKE: For detecting AI-generated media, use tg_engine_ask or tg_bitmind_detect_image.
-4. CHAT / GENERAL AI: Use tg_engine_ask. Use tg_engine_ask_subnet with subnet_id='102'
-   for direct OpenAI access.
-5. SIGNALS: Use tg_daemon_categories and tg_daemon_questions for signal monitoring.
-6. DISCOVERY: Use tg_engine_list_subnets to see available subnets.
+1. ASK: For live facts (prices, FX, weather, search) and specialist answers
+   (security, code review, compliance), use telegraph_ask with the question.
+2. DISCOVERY: telegraph_find_intents shows what can be asked, telegraph_intent an
+   intent's params, telegraph_find_miners and telegraph_ranking who answers.
+3. ONE MINER: telegraph_ask_miner asks a miner the user names.
+4. MONEY: An ask costs about $0.01. telegraph_account shows balances;
+   telegraph_deposit tops up escrow, only after the user confirms the amount.
 
-Always mention what Telegraph subnet was used and why.
+Always say which miner answered.
 """
 
 
@@ -50,12 +49,11 @@ async def main():
             "transport": "stdio",
             "command": "node",
             "args": [TELEGRAPH_MCP_ENTRY],
-            "env": {
-                "TELEGRAPH_NODE_URL": os.getenv("TELEGRAPH_NODE_URL", "http://13.237.89.59:7044"),
-                "TELEGRAPH_ENGINE_URL": os.getenv("TELEGRAPH_ENGINE_URL", "http://13.237.89.59:8080"),
-                "TELEGRAPH_DAEMON_URL": os.getenv("TELEGRAPH_DAEMON_URL", "http://13.237.89.59:8081"),
-                "TELEGRAPH_EVM_PRIVATE_KEY": os.getenv("TELEGRAPH_EVM_PRIVATE_KEY", ""),
-            },
+            "env": {k: v for k, v in {
+                "PATH": os.environ.get("PATH", ""),
+                "TELEGRAPH_PRIVATE_KEY": os.getenv("TELEGRAPH_PRIVATE_KEY", ""),
+                "TELEGRAPH_URL": os.getenv("TELEGRAPH_URL", ""),
+            }.items() if v},
         }
     })
 
@@ -77,9 +75,9 @@ async def main():
 
     # Test 1: Free tools (no payment)
     tests_free = [
-        ("tg_daemon_health", {}, "Daemon health check"),
-        ("tg_engine_list_subnets", {}, "List engine subnets"),
-        ("tg_daemon_categories", {}, "List signal categories"),
+        ("telegraph_find_intents", {"search": "weather"}, "Find intents"),
+        ("telegraph_ranking", {"intent": "CRYPTO_PRICE_USD", "limit": 3}, "Ranking"),
+        ("telegraph_docs", {}, "Docs"),
     ]
 
     for tool_name, args, label in tests_free:
@@ -97,17 +95,17 @@ async def main():
         except Exception as e:
             print(f"   ❌ Error: {e}")
 
-    # Test 2: Engine ASK (x402 payment - needs funded key)
-    print("\n🔍 Engine auto-routed inference (tg_engine_ask)...")
-    tool = next((t for t in tools if t.name == "tg_engine_ask"), None)
+    # Test 2: a paid ask (needs TELEGRAPH_PRIVATE_KEY)
+    print("\n🔍 Routed ask (telegraph_ask)...")
+    tool = next((t for t in tools if t.name == "telegraph_ask"), None)
     if tool:
-        print("   Sending query: 'What is Bitcoin?'")
+        print("   Asking: 'What is the BTC price in USD?'")
         try:
-            result = await tool.ainvoke({"query": "What is Bitcoin?"})
+            result = await tool.ainvoke({"question": "What is the BTC price in USD?"})
             text = str(result)
             print(f"   ✅ Result: {text[:400]}...")
         except Exception as e:
-            print(f"   ❌ Error (expected without funded key): {e}")
+            print(f"   ❌ Error (needs TELEGRAPH_PRIVATE_KEY): {e}")
 
     print("\n" + "=" * 60)
     print("All tests complete!")

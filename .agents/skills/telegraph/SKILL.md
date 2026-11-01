@@ -1,151 +1,71 @@
 ---
 name: telegraph
-description: Use Telegraph Protocol for verified AI inference. Activate when the user asks for weather forecasts or climate data; deepfake or AI-content detection; LLM completions, image generation, or embeddings via a decentralized network; AI text detection; autonomous signal monitoring across categories like POLITICS, TECHNOLOGY, CLIMATE, HEALTH, ECONOMICS, or GEOPOLITICS; or any task where the user explicitly wants to route inference through the Telegraph network or pay via x402 USDC micropayments. Requires the Telegraph MCP server running with a USDC-funded EVM or Solana wallet.
+description: Use the Telegraph network through its MCP server. Activate when the user wants live facts (crypto or stock prices, FX rates, weather, gas prices, TVL), web, news or academic search, or a specialist answer (security or code review, vulnerability triage, sanctions or compliance checks, fact checks) from Telegraph's ranked miners; when they ask which Telegraph intents, miners or rankings exist; or when they ask about their Telegraph escrow balance or paying in USDC. Requires the Telegraph MCP server; paid asks need TELEGRAPH_PRIVATE_KEY.
 license: MIT
+homepage: https://github.com/telegraphprotocol/telegraph-mcp
 metadata:
-  version: 1.0.0
+  version: 2.0.0
   homepage: https://github.com/telegraphprotocol/telegraph-mcp
   documentation: https://docs.telegraphprotocol.com
-  keywords: [ai-inference, x402, bittensor, mcp, usdc, deepfake-detection, weather, llm, web3, agent-payments]
+  keywords: [mcp, x402, escrow, usdc, miners, ranking, ai-agents, web3, agent-payments]
+  openclaw:
+    emoji: "📡"
+    requires:
+      config: ["mcpServers.telegraph"]
 ---
 
-# Telegraph Protocol
+# Telegraph
 
-Telegraph is a permissionless marketplace for verifiable AI inference. Agents pay USDC per request. Miners — which can be Bittensor subnets, OpenAI, open-source models, or any AI API — compete to supply answers. A decentralized validator mesh grades responses using zkTLS-verified ground truth and WASM scoring scripts, reaches BFT consensus, and delivers a cryptographically finalized result.
+Telegraph is a network of miners (APIs and models run by different people) that answer questions by intent. Every epoch the network checks each intent's miners and ranks them, and an ask goes to the best-ranked live miner. Asks are paid in USDC, usually $0.01.
 
-The native token is **MACHINA**. Every USDC paid for inference flows through an open-market TWAP to buy MACHINA for the miner — demand for intelligence directly drives demand for the token.
+## Tools
 
----
+| Tool | Cost | Use it to |
+|---|---|---|
+| `telegraph_ask` | ~$0.01 | Ask a question. Optional `intent` and `params` make it exact |
+| `telegraph_ask_miner` | that miner's price | Ask one miner the user chose, or call one of its endpoints directly |
+| `telegraph_find_intents` | free | Find the intent for a kind of question |
+| `telegraph_intent` | free | See an intent's kind, params, answer fields and top miners |
+| `telegraph_find_miners` | free | List an intent's miners with rank, score and price, or search miners by words |
+| `telegraph_ranking` | free | The latest ranking for an intent, or for all |
+| `telegraph_account` | free | Wallet USDC and ETH, and the escrow balance |
+| `telegraph_deposit` | gas | Move wallet USDC into escrow. Confirm the amount with the user first |
+| `telegraph_docs` | free | How payments, intents, ranking and errors work |
 
-## MCP Tool Reference
+## How to use it
 
-### Free tools (no payment)
-
-| Tool | Purpose |
-|------|---------|
-| `tg_node_list_subnets` | Full miner catalog — IDs, slugs, endpoints, input/output schemas |
-| `tg_node_subnets_health` | Health status of all miner integrations |
-| `tg_node_status` | Node identity, public key, chain info |
-| `tg_engine_list_subnets` | Engine's view of available miners with capabilities and cost |
-| `tg_daemon_categories` | Signal categories in the Daemon database (POLITICS, CLIMATE, TECHNOLOGY, …) |
-| `tg_daemon_questions` | Query the Daemon's stored signals — filterable by category, source, time, interest |
-| `tg_daemon_health` | Daemon health check |
-
-> The `subnet` in some tool names is legacy — every provider is a **miner** today, whether a Bittensor subnet, a hosted model, or a private API.
-
-### Paid tools (x402 USDC per call)
-
-| Tool | Purpose |
-|------|---------|
-| `tg_engine_ask` | Auto-routed inference — Engine's LLM router selects the best miner for your query |
-| `tg_engine_ask_subnet` | Direct inference to a specific miner by ID |
-| Dynamic tools (auto-discovered) | Per-miner tools generated from the live integration registry (see below) |
-
----
-
-## Access Modes
-
-### 1. Auto-routed inference (recommended)
-The Engine classifies your natural language query into an Intent and routes to the highest-ranked miner for that task:
-
-```
-tg_engine_ask(query="7-day weather forecast for Dubai")
-tg_engine_ask(query="Is this image AI-generated?")
-tg_engine_ask(query="Summarize the latest clinical trial results for GLP-1 drugs")
-```
-
-The response includes `routing.reasoning` — which subnet was chosen and why.
-
-### 2. Direct miner inference
-Route to a specific miner when you know exactly what you want:
-
-```
-tg_engine_ask_subnet(subnet_id="18", method="GET", endpoint="/predict", payload={lat: 25.2, lon: 55.3, variable: "hourly"})
-tg_engine_ask_subnet(subnet_id="34", method="POST", endpoint="/", payload={image_url: "https://..."})
-tg_engine_ask_subnet(subnet_id="102", method="POST", endpoint="/chat", payload={model: "gpt-4o-mini", messages: [...]})
-```
-
-### 3. Daemon signal feed (free reads)
-The Daemon runs autonomously every 3 hours — collecting data from registered sources (weather APIs, market feeds, news and social feeds), routing questions through miners, and storing verified results. Reading these is free:
-
-```
-tg_daemon_categories()
-# → live list of categories with current counts
-
-tg_daemon_questions(category="CLIMATE", limit=10)
-tg_daemon_questions(category="TECHNOLOGY", sort="interest", min_interest=5)
-tg_daemon_questions(source="polymarket", since_hours=24)
-```
-
-### 4. Dynamic miner tools (auto-discovered)
-On startup, the MCP server fetches the live integration registry and generates per-endpoint tools for every active miner. These update every 5 minutes without restart. The live set changes on-chain — treat the table below as a snapshot, not the source of truth:
-
-| Tool (auto-generated) | Miner | Capability |
-|-----------------------|-------|-----------|
-| `tg_zeus_predict` | Zeus (18) | Weather forecast |
-| `tg_itsai_text_detector_detect` | ItsAI (32) | AI text detection |
-| `tg_sapling_ai_detector_detect` | Sapling (33) | AI content detection |
-| `tg_bitmind_detect_image` | BitMind (34) | Deepfake image detection |
-| `tg_bitmind_detect_video` | BitMind (34) | Deepfake video detection |
-| `tg_openai_chat` | OpenAI (102) | LLM chat |
-| `tg_openai_images_generate` | OpenAI (102) | Image generation |
-| `tg_openai_embed` | OpenAI (102) | Text embeddings |
-| `tg_openai_moderate` | OpenAI (102) | Content moderation |
-
-Use `tg_node_list_subnets` to see the current live catalog with full schemas.
-
----
-
-## Active Intents
-
-The Engine's LLM router maps queries to canonical Intents:
-
-| Category | Intents |
-|----------|---------|
-| Language | `LANGUAGE_GENERATION`, `CHAT_COMPLETION`, `TEXT_GENERATION`, `HIGH_PERFORMANCE_INFERENCE`, `EMBEDDINGS`, `CONTENT_MODERATION` |
-| Weather | `WEATHER_CHECK`, `WEATHER_FORECAST`, `STORM_ALERT`, `WEATHER_RISK_ASSESSMENT` |
-| Vision | `MULTIMODAL_INFERENCE`, `IMAGE_GENERATION`, `TEXT_TO_IMAGE` |
-| Search | `WEB_SEARCH`, `TWITTER_SEARCH`, `NEWS_SEARCH`, `RESEARCH_SYNTHESIS`, `FACT_CHECK` |
-| Authenticity | `DEEPFAKE_DETECTION`, `MEDIA_AUTHENTICITY_CHECK`, `AI_TEXT_DETECTION`, `TEXT_AUTHENTICITY_CHECK`, `IMAGE_VERIFICATION`, `VIDEO_VERIFICATION` |
-| Tasks | `TASK_COMPLETION`, `AGENT_TASK` |
-
----
+- **A plain question is enough**: `telegraph_ask(question="What is the BTC price in USD?")`. The node finds the intent and the miner.
+- **To be exact**, find the intent and its params first, then ask with them:
+  `telegraph_find_intents(search="weather")` → `telegraph_intent(intent="WEATHER_CHECK_TEMPERATURE")` → `telegraph_ask(intent="WEATHER_CHECK_TEMPERATURE", params={"location": "Lahore"})`.
+- The answer comes back in the intent's fields (`answer`), with the miner that answered and the payment receipt. Tell the user which miner answered.
+- An intent with no ranking yet is answered by one of the miners that declare it. `telegraph_intent` says when that is the case.
 
 ## Payments
 
-All paid calls use **x402** — an HTTP-native micropayment protocol. The MCP server handles the full flow transparently: receives the 402 challenge, signs the USDC transfer using your configured private key, and retries. The agent never sees the payment step.
+- **Escrow first**: if the wallet has a Telegraph escrow balance, each ask is signed against it and deducted at the epoch close. A failed ask is never billed.
+- **x402 fallback**: otherwise the ask is paid from the wallet's USDC. If it then fails, the amount is credited to the user's escrow.
+- `telegraph_account` shows the balances. `telegraph_deposit` tops up escrow, but only after the user confirms the amount.
+- The private key stays in the MCP server's process. It never appears in tool inputs, outputs or model context.
 
-- **Network**: Base Sepolia (testnet) — USDC `0x036CbD53842c5426634e7929541eC2318f3dCF7e`
-- **Typical cost**: $0.01 – $0.05 per inference call
-- **Pricing**: miner's floor price × demand multiplier (rises with 24h request volume for the Intent)
-- **Use a burner wallet** — fund with only the USDC you need; never use a main wallet
+## Errors
 
----
+- **503 "could not route" or `no_compatible_miner`**: nothing was charged. Retry, or ask without the intent.
+- **400 `invalid_params`**: check the params with `telegraph_intent`.
+- **402**: escrow and wallet are both short. Check `telegraph_account`.
+- **"Paying needs a wallet"**: the server has no `TELEGRAPH_PRIVATE_KEY`. The free tools still work.
 
 ## Setup
 
-1. Clone and build:
-   ```bash
-   git clone https://github.com/telegraphprotocol/telegraph-mcp
-   cd telegraph-mcp && npm install && npm run build
-   ```
+```json
+{
+  "mcpServers": {
+    "telegraph": {
+      "command": "npx",
+      "args": ["-y", "@telegraphprotocol/telegraph-protocol-mcp"],
+      "env": { "TELEGRAPH_PRIVATE_KEY": "0xyour_burner_wallet_key" }
+    }
+  }
+}
+```
 
-2. Add to your MCP client config (Claude Desktop, Cursor, etc.):
-   ```json
-   {
-     "mcpServers": {
-       "telegraph": {
-         "command": "node",
-         "args": ["/path/to/Telegraph-MCP/dist/index.js"],
-         "env": {
-           "TELEGRAPH_NODE_URL": "http://13.237.89.59:7044",
-           "TELEGRAPH_ENGINE_URL": "http://13.237.89.59:8080",
-           "TELEGRAPH_DAEMON_URL": "http://13.237.89.59:8081",
-           "TELEGRAPH_EVM_PRIVATE_KEY": "0xyour_burner_wallet_key"
-         }
-       }
-     }
-   }
-   ```
-
-Full integration guides for Claude Desktop, Cursor, ElizaOS, LangChain, Goose, and others are in the [README](https://github.com/telegraphprotocol/telegraph-mcp#readme).
+The default network is Telegraph beta 2 on Ethereum Sepolia (test USDC). On OpenClaw this skill gates on the `mcpServers.telegraph` config entry, so it stays dormant until the server is configured. Client guides: [README](https://github.com/telegraphprotocol/telegraph-mcp#readme).

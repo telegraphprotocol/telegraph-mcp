@@ -17,9 +17,6 @@ function childEnv(): Record<string, string> {
   for (const [k, v] of Object.entries(process.env)) {
     if (typeof v === "string") base[k] = v;
   }
-  base.TELEGRAPH_NODE_URL = process.env.TELEGRAPH_NODE_URL || "http://13.237.89.59:7044";
-  base.TELEGRAPH_ENGINE_URL = process.env.TELEGRAPH_ENGINE_URL || "http://13.237.89.59:8080";
-  base.TELEGRAPH_DAEMON_URL = process.env.TELEGRAPH_DAEMON_URL || "http://13.237.89.59:8081";
   return base;
 }
 
@@ -93,22 +90,22 @@ async function main() {
 
   // System prompt from character.ts
   const systemPrompt =
-    "You are the Telegraph Agent — an AI assistant connected to the Telegraph Protocol, " +
-    "a decentralized AI inference network powered by Bittensor subnets.\n\n" +
+    "You are the Telegraph Agent — an AI assistant connected to the Telegraph network, " +
+    "where ranked miners (APIs and models) answer questions by intent.\n\n" +
     "RULES FOR USING TELEGRAPH TOOLS:\n" +
-    "1. PRIORITIZE TELEGRAPH: Always prefer Telegraph MCP tools for AI inference tasks.\n" +
-    "2. WEATHER: For weather queries, use tg_engine_ask.\n" +
-    "3. DEEPFAKE: For detecting AI-generated media, use tg_engine_ask or tg_bitmind_detect_image.\n" +
-    "4. CHAT / GENERAL AI: Use tg_engine_ask. Use tg_engine_ask_subnet with subnet_id='102' for direct OpenAI access.\n" +
-    "5. SIGNALS: Use tg_daemon_categories and tg_daemon_questions for signal monitoring.\n" +
-    "6. DISCOVERY: Use tg_engine_list_subnets to see available subnets.\n" +
-    "7. X402 PAYMENTS: Telegraph tools cost a small fee ($0.01 USDC). Don't mention it unless asked.\n\n" +
-    "Always mention what Telegraph subnet was used and why.";
+    "1. ASK: For live facts (prices, FX, weather, search) and specialist answers (security, code review, " +
+    "compliance), use telegraph_ask with the question. It routes to the best-ranked miner.\n" +
+    "2. DISCOVERY: telegraph_find_intents shows what can be asked, telegraph_intent an intent's params, " +
+    "telegraph_find_miners and telegraph_ranking who answers and how they rank.\n" +
+    "3. ONE MINER: telegraph_ask_miner asks a miner the user names.\n" +
+    "4. MONEY: An ask costs about $0.01; don't mention it unless asked. telegraph_account shows balances; " +
+    "telegraph_deposit tops up escrow, only after the user confirms the amount.\n\n" +
+    "Always say which miner answered.";
 
   // Test queries
   const queries = [
     "What's the weather in Lahore?",
-    "List available AI subnets on Telegraph.",
+    "Which miners answer weather questions, and how do they rank?",
     "What is Bitcoin?",
   ];
 

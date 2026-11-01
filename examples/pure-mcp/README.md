@@ -6,7 +6,7 @@ Validates the Telegraph MCP server using the raw Python MCP SDK — no framework
 
 ```bash
 pip install -r requirements.txt
-export TELEGRAPH_EVM_PRIVATE_KEY=0xyour_key_here
+export TELEGRAPH_PRIVATE_KEY=0xyour_key_here   # optional: only paid asks need it
 python test_mcp.py
 ```
 
@@ -14,7 +14,6 @@ python test_mcp.py
 
 - Connects to the Telegraph MCP server via stdio
 - Lists all discovered tools
-- Verifies free tools (health, subnets, categories)
-- Verifies paid tools (x402 engine ask)
+- Calls one free tool (`telegraph_find_intents`)
 
 This is the canonical validation script: if this passes, any stdio MCP client will work.

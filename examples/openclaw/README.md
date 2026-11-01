@@ -1,6 +1,6 @@
 # OpenClaw + Telegraph
 
-Connect OpenClaw to Telegraph's decentralized AI inference network — weather forecasting, deepfake detection, LLM inference, AI-text detection, signal feeds — with x402 USDC micropayments handled transparently by the MCP server.
+Connect OpenClaw to the Telegraph network: ranked miners for prices, FX, weather, search, security, code review and 100+ other intents, paid per ask in USDC (escrow first, then x402) by the MCP server.
 
 OpenClaw has native MCP support, so this takes two steps: register the MCP server, then install the skill.
 
@@ -14,19 +14,16 @@ Merge [`openclaw.config.json`](./openclaw.config.json) into `~/.openclaw/opencla
     "telegraph": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "telegraph-protocol-mcp"],
+      "args": ["-y", "@telegraphprotocol/telegraph-protocol-mcp"],
       "env": {
-        "TELEGRAPH_NODE_URL": "http://13.237.89.59:7044",
-        "TELEGRAPH_ENGINE_URL": "http://13.237.89.59:8080",
-        "TELEGRAPH_DAEMON_URL": "http://13.237.89.59:8081",
-        "TELEGRAPH_EVM_PRIVATE_KEY": "0xyour_burner_wallet_key"
+        "TELEGRAPH_PRIVATE_KEY": "0xyour_burner_wallet_key"
       }
     }
   }
 }
 ```
 
-Replace `0xyour_burner_wallet_key` with a **burner wallet** private key funded with a small amount of USDC on Base Sepolia (testnet USDC: `0x036CbD53842c5426634e7929541eC2318f3dCF7e`).
+Replace `0xyour_burner_wallet_key` with a **burner wallet** private key holding a little USDC on the Telegraph network. Beta 2 runs on Ethereum Sepolia; its test USDC is `0xcc194e1a843B658526D0D5C431f670028582Ae17` (see the main README for test funds). Without a key, the free tools still work.
 
 ## 2. Install the skill
 
@@ -48,14 +45,14 @@ The skill is **gated on the `mcpServers.telegraph` config entry** — it stays d
 
 Ask your agent:
 
-> List the available Telegraph miners
+> Which Telegraph miners answer crypto price questions, and how do they rank?
 
-It should call `tg_node_list_subnets` (free, no payment) and return the live miner catalog. Then try a paid call:
+It should call `telegraph_find_miners` or `telegraph_ranking` (free). Then try a paid call:
 
-> Get a 7-day weather forecast for Dubai via Telegraph
+> What is the BTC price? Use Telegraph.
 
 ## Security model
 
 - The private key lives only in the MCP server's process environment. OpenClaw and the LLM never see it — it never appears in tool inputs, outputs, or model context. Only signed x402 payment authorizations leave the machine.
-- Use a burner wallet funded with only the USDC you intend to spend. Typical cost is $0.01–$0.05 per paid inference call; discovery/health/signal-feed tools are free.
-- Defaults point at Base Sepolia testnet.
+- Use a burner wallet funded with only the USDC you intend to spend. An ask usually costs $0.01; the discovery, ranking, account and docs tools are free.
+- Defaults point at Telegraph beta 2 on Ethereum Sepolia (testnet).
