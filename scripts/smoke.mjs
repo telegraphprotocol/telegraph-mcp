@@ -35,7 +35,7 @@ await show("telegraph_find_miners", { intent: "CRYPTO_PRICE_USD", limit: 3 });
 await show("telegraph_find_miners", { search: "weather", limit: 3 });
 await show("telegraph_ranking", { intent: "CRYPTO_PRICE_USD", limit: 3 });
 await show("telegraph_docs", { search: "withdraw escrow" });
-await show("telegraph_account");
+if (process.env.TELEGRAPH_PRIVATE_KEY) await show("telegraph_account");
 if (process.argv.includes("paid")) {
   await show("telegraph_ask", { question: "What is the BTC price in USD?" });
   await show("telegraph_ask", { intent: "CRYPTO_PRICE_USD", params: { symbol: "ETH" } });
