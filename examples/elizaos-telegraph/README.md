@@ -29,7 +29,7 @@ npm install
 # 2. Configure
 cp .env.example .env
 # Edit: set ANTHROPIC_API_KEY (or OPENAI_API_KEY)
-# Edit: set TELEGRAPH_EVM_PRIVATE_KEY
+# Edit: set TELEGRAPH_PRIVATE_KEY
 
 # 3. Run
 npm start
@@ -41,7 +41,7 @@ npm start
 |----------|----------|-------------|
 | `ANTHROPIC_API_KEY` | Yes* | Claude API key for the agent's brain |
 | `OPENAI_API_KEY` | Yes* | OpenAI API key (alternative) |
-| `TELEGRAPH_EVM_PRIVATE_KEY` | Yes | EVM key for x402 payments |
+| `TELEGRAPH_PRIVATE_KEY` | For paid asks | Wallet that pays (escrow first, then x402) |
 
 *At least one LLM provider key required.
 
@@ -62,7 +62,7 @@ The `src/character.ts` file configures the agent with a Telegraph-prioritizing s
 ## Testing
 
 Ask the agent questions like:
-- "What's the weather in Lahore?" → uses `tg_engine_ask` → routes to Zeus SN18
-- "Is this image a deepfake?" → uses `tg_engine_ask` → routes to BitMind SN34
-- "What does the daemon track?" → uses `tg_daemon_categories`
-- "List available AI subnets" → uses `tg_engine_list_subnets`
+- "What's the BTC price?" → `telegraph_ask` → the top-ranked CRYPTO_PRICE_USD miner
+- "Which miners answer weather questions?" → `telegraph_find_miners`
+- "How do code review miners rank?" → `telegraph_ranking`
+- "How much is in my escrow?" → `telegraph_account`

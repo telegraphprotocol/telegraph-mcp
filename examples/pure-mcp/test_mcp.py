@@ -9,19 +9,17 @@ import os
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-TELEGRAPH_NODE_URL = os.getenv("TELEGRAPH_NODE_URL", "http://13.237.89.59:7044")
-TELEGRAPH_ENGINE_URL = os.getenv("TELEGRAPH_ENGINE_URL", "http://13.237.89.59:8080")
-TELEGRAPH_DAEMON_URL = os.getenv("TELEGRAPH_DAEMON_URL", "http://13.237.89.59:8081")
+ENTRY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../dist/index.js")
 
+# Only what is set: a placeholder key would stop the server.
 server_params = StdioServerParameters(
     command="node",
-    args=["/path/to/telegraph-mcp/dist/index.js"],
-    env={
-        "TELEGRAPH_NODE_URL": TELEGRAPH_NODE_URL,
-        "TELEGRAPH_ENGINE_URL": TELEGRAPH_ENGINE_URL,
-        "TELEGRAPH_DAEMON_URL": TELEGRAPH_DAEMON_URL,
-        "TELEGRAPH_EVM_PRIVATE_KEY": os.getenv("TELEGRAPH_EVM_PRIVATE_KEY", "0xyour_key_here"),
-    },
+    args=[ENTRY],
+    env={k: v for k, v in {
+        "PATH": os.environ.get("PATH", ""),
+        "TELEGRAPH_PRIVATE_KEY": os.getenv("TELEGRAPH_PRIVATE_KEY", ""),
+        "TELEGRAPH_URL": os.getenv("TELEGRAPH_URL", ""),
+    }.items() if v},
 )
 
 async def main():
@@ -32,6 +30,8 @@ async def main():
             print(f"Discovered {len(tools.tools)} tools:")
             for t in tools.tools:
                 print(f"  - {t.name}: {t.description[:60]}...")
+            r = await session.call_tool("telegraph_find_intents", {"search": "bitcoin price"})
+            print("\ntelegraph_find_intents:", r.content[0].text[:300])
 
 if __name__ == "__main__":
     asyncio.run(main())

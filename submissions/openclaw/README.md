@@ -48,10 +48,10 @@ Title: feat(skills): add Telegraph Protocol skill (config-gated, dormant by defa
 
 ## What
 
-Adds a bundled `telegraph` skill for the Telegraph Protocol — a decentralized
-AI-inference marketplace (weather forecasting, deepfake/AI-content detection,
-LLM inference, embeddings, signal feeds) paid per call via x402 USDC
-micropayments through a local MCP server.
+Adds a bundled `telegraph` skill for the Telegraph network: ranked miners
+(APIs and models) answer questions by intent (prices, FX, weather, search,
+security, code review and 100+ others), paid per ask in USDC (escrow first,
+then x402) through a local MCP server.
 
 ## Why it is safe to bundle
 
@@ -60,29 +60,29 @@ micropayments through a local MCP server.
   added the Telegraph MCP server to `openclaw.json`. Everyone else pays zero
   prompt/token overhead and the skill is invisible to the agent.
 - **No new binaries or dependencies.** The MCP server runs via
-  `npx -y telegraph-protocol-mcp` (MIT, published on npm, listed on the
+  `npx -y @telegraphprotocol/telegraph-protocol-mcp` (MIT, published on npm, listed on the
   official MCP Registry as `io.github.telegraphprotocol/telegraph`).
 - **Key custody.** The wallet private key lives only in the MCP server's
   process environment. OpenClaw and the model never see it; it never appears
   in tool inputs/outputs. Only signed x402 payment authorizations leave the
-  machine. Docs mandate burner wallets; defaults point at Base Sepolia
-  testnet.
-- **Paid calls are explicit.** Free discovery/health/signal tools are clearly
+  machine. Docs mandate burner wallets; defaults point at Telegraph beta 2
+  on Ethereum Sepolia (testnet).
+- **Paid calls are explicit.** Free discovery, ranking and docs tools are clearly
   separated from paid inference tools in the skill text; typical paid call is
   $0.01–$0.05 USDC.
 
 ## Traction
 
 - ClawHub: <N> installs since <date> (slug: `telegraph`)
-- npm: `telegraph-protocol-mcp` — <N> weekly downloads
+- npm: `@telegraphprotocol/telegraph-protocol-mcp` — <N> weekly downloads
 - MCP Registry: `io.github.telegraphprotocol/telegraph`
 
 ## Testing
 
 Configured `mcpServers.telegraph` in `openclaw.json`, started a new session,
-confirmed the skill loads and the agent calls `tg_node_list_subnets` (free)
-and `tg_engine_ask` (paid, x402-settled). Removed the config entry, confirmed
-the skill no longer loads.
+confirmed the skill loads and the agent calls `telegraph_find_miners` (free)
+and `telegraph_ask` (paid). Removed the config entry, confirmed the skill no
+longer loads. (Done with v1's tool names; repeat with v2 before submitting.)
 ```
 
 ## Security statement (reuse in any review thread)
@@ -92,4 +92,4 @@ the skill no longer loads.
 > exposes only inference tools to the agent. The key is never part of model
 > context, tool schemas, or tool results. Users are instructed to use a
 > dedicated burner wallet funded with only the USDC they intend to spend.
-> Defaults target Base Sepolia testnet.
+> Defaults target Telegraph beta 2 on Ethereum Sepolia (testnet).

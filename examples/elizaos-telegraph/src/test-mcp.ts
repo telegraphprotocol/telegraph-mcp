@@ -21,9 +21,6 @@ function childEnv(): Record<string, string> {
   for (const [k, v] of Object.entries(process.env)) {
     if (typeof v === "string") base[k] = v;
   }
-  base.TELEGRAPH_NODE_URL = process.env.TELEGRAPH_NODE_URL || "http://13.237.89.59:7044";
-  base.TELEGRAPH_ENGINE_URL = process.env.TELEGRAPH_ENGINE_URL || "http://13.237.89.59:8080";
-  base.TELEGRAPH_DAEMON_URL = process.env.TELEGRAPH_DAEMON_URL || "http://13.237.89.59:8081";
   return base;
 }
 
@@ -51,26 +48,16 @@ async function main() {
     // ── List all tools ──────────────────────────────────────────────
     const { tools } = await client.listTools();
     console.log(`📋 ${tools.length} tools available:\n`);
-    const categories: Record<string, string[]> = {};
-    for (const t of tools) {
-      const cat = t.name.startsWith("tg_node_") ? "Node" :
-        t.name.startsWith("tg_engine_") ? "Engine" :
-        t.name.startsWith("tg_daemon_") ? "Daemon" :
-        "Subnet";
-      (categories[cat] ||= []).push(t.name);
-    }
-    for (const [cat, names] of Object.entries(categories)) {
-      console.log(`  ${cat} (${names.length}): ${names.join(", ")}`);
-    }
+    console.log(`  ${tools.map((t) => t.name).join(", ")}`);
 
     // ── Test free tools ────────────────────────────────────────────
     console.log("\n── Testing free tools ──\n");
 
     const freeTools = [
-      ["tg_daemon_health", {}, "Daemon health"],
-      ["tg_daemon_categories", {}, "Signal categories"],
-      ["tg_engine_list_subnets", {}, "Engine subnets"],
-      ["tg_node_status", {}, "Node status"],
+      ["telegraph_find_intents", { search: "weather" }, "Find intents"],
+      ["telegraph_ranking", { intent: "CRYPTO_PRICE_USD", limit: 3 }, "Ranking"],
+      ["telegraph_find_miners", { intent: "CRYPTO_PRICE_USD", limit: 3 }, "Miners"],
+      ["telegraph_docs", {}, "Docs"],
     ];
 
     for (const [name, args, label] of freeTools) {
@@ -83,18 +70,18 @@ async function main() {
       }
     }
 
-    // ── Test Engine tools ──────────────────────────────────────────
-    console.log("\n── Testing engine tools ──\n");
+    // ── Test a paid ask ────────────────────────────────────────────
+    console.log("\n── Testing a paid ask ──\n");
 
     try {
       const result = await client.callTool({
-        name: "tg_engine_ask",
-        arguments: { query: "What is Bitcoin?" },
+        name: "telegraph_ask",
+        arguments: { question: "What is the BTC price in USD?" },
       });
       const text = result.content?.map((c: any) => c.text || "").join("") || "";
-      console.log(`✅ Engine ask: ${text.substring(0, 200)}...`);
+      console.log(`✅ Ask: ${text.substring(0, 200)}...`);
     } catch (err: any) {
-      console.log(`⚠️  Engine ask (expected without funded key): ${err.message?.substring(0, 100)}`);
+      console.log(`⚠️  Ask (needs TELEGRAPH_PRIVATE_KEY): ${err.message?.substring(0, 100)}`);
     }
 
     console.log("\n✅ All tests complete!");
