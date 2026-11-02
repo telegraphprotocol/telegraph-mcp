@@ -25,7 +25,7 @@
         },
         {
           "name": "TELEGRAPH_URL",
-          "description": "Telegraph node URL. Default: beta 2, http://13.237.89.59:7148",
+          "description": "Telegraph node URL. Default: beta 2, https://devnode.telegraphprotocol.com",
           "isRequired": false,
           "format": "string"
         },

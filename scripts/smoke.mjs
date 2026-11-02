@@ -39,6 +39,6 @@ if (process.env.TELEGRAPH_PRIVATE_KEY) await show("telegraph_account");
 if (process.argv.includes("paid")) {
   await show("telegraph_ask", { question: "What is the BTC price in USD?" });
   await show("telegraph_ask", { intent: "CRYPTO_PRICE_USD", params: { symbol: "ETH" } });
-  await show("telegraph_ask_miner", { miner: "crypto-kraken", intent: "CRYPTO_PRICE_USD", params: { symbol: "BTC" } });
+  await show("telegraph_ask_miner", { miner: "cryptopulse-multisource-price", intent: "CRYPTO_PRICE_USD", params: { symbol: "BTC" } });
 }
 await client.close();

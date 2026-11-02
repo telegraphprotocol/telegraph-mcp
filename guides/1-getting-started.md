@@ -10,7 +10,7 @@ The server works with no settings for the free tools. To ask questions it needs 
 
 Optional:
 
-- `TELEGRAPH_URL`: the node to use. Default: Telegraph beta 2, `http://13.237.89.59:7148`.
+- `TELEGRAPH_URL`: the node to use. Default: Telegraph beta 2, `https://devnode.telegraphprotocol.com`.
 - `TELEGRAPH_PAYMENT`: `auto` (default: escrow first, then x402), `escrow` or `x402`.
 - `TELEGRAPH_RPC_URL`, `TELEGRAPH_DIAMOND`, `TELEGRAPH_CHAIN_ID`: the chain behind the node. The defaults match beta 2.
 
