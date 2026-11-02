@@ -33,7 +33,7 @@ Then ask your agent things like "what is the BTC price?", "which miners serve we
 | Variable | Default | What it is |
 |---|---|---|
 | `TELEGRAPH_PRIVATE_KEY` | none | Wallet that pays for asks. Without it only the free tools work. (`TELEGRAPH_EVM_PRIVATE_KEY`, the v1 name, also works.) |
-| `TELEGRAPH_URL` | `http://13.237.89.59:7148` | The node (Telegraph beta 2) |
+| `TELEGRAPH_URL` | `https://devnode.telegraphprotocol.com` | The node (Telegraph beta 2) |
 | `TELEGRAPH_PAYMENT` | `auto` | `auto`: escrow first, then x402. `escrow` or `x402`: only that one |
 | `TELEGRAPH_RPC_URL` | public Sepolia RPC | Chain RPC, for the balance and deposit tools |
 | `TELEGRAPH_DIAMOND`, `TELEGRAPH_CHAIN_ID` | beta 2's | The contract that holds escrow, and its chain |

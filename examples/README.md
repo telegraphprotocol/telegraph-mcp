@@ -53,7 +53,7 @@ Telegraph MCP Server  ←  you run this alongside the framework
     │ HTTP + x402 payment
     │
     ▼
-Telegraph Node / Engine / Daemon  ←  running at 13.237.89.59
+Telegraph Node / Engine / Daemon  ←  running at devnode.telegraphprotocol.com
 ```
 
 The framework connects to the Telegraph MCP server as an **MCP client**. The MCP server handles all x402 payment signing internally — the framework and its LLM never see the private key.

@@ -15,7 +15,7 @@ Telegraph MCP Server (stdio transport)
   │ HTTP + x402 payment
   │
   ▼
-Telegraph Node / Engine / Daemon (13.237.89.59)
+Telegraph Node / Engine / Daemon (devnode.telegraphprotocol.com)
 ```
 
 ## Quick Start

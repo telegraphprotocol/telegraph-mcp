@@ -12,7 +12,7 @@ export interface Config {
 // Telegraph beta 2 on Ethereum Sepolia: the default network, so the server
 // works with no settings at all.
 const DEFAULTS = {
-  url: "http://13.237.89.59:7148",
+  url: "https://devnode.telegraphprotocol.com",
   diamond: "0x3624EB012B5E998BB57B6bE6C9Cfc9c4bc5eb99b",
   chainId: 11155111,
   rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
