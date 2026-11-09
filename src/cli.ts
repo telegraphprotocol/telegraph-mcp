@@ -1,0 +1,218 @@
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir, platform } from "node:os";
+import { dirname, join } from "node:path";
+import { createInterface } from "node:readline/promises";
+import { privateKeyToAccount } from "viem/accounts";
+import { loadConfig, type Config } from "./config.js";
+import { Chain } from "./chain.js";
+import { SpendLog } from "./limits.js";
+import { newKey, saveWallet, walletPath } from "./wallet.js";
+import { getJson } from "./http.js";
+import { RUN, SERVER } from "./tools.js";
+
+// The terminal side, for a person: make a wallet, fund it, add the server to an
+// agent app. Every on-chain step asks first. The MCP server never prompts and
+// never handles setup.
+
+const FAUCET = "https://anjoman.ai/dashboard/faucet"; // where beta 2's test USDC comes from
+
+const HELP = `Telegraph MCP server
+
+  ${RUN} setup          make a wallet, fund it, and add Telegraph to your agent
+  ${RUN} fund [usd]     move USDC into escrow (you confirm first)
+  ${RUN} status         balances, limits and what today's asks have cost
+  ${RUN} install [app]  add Telegraph to claude-desktop, cursor, codex or claude-code (any other app: it prints the entry)
+
+With no command, an MCP client starts this as a server over stdio.`;
+
+export async function runCli(argv: string[]): Promise<number> {
+  const io = new Io(argv.includes("--yes") || argv.includes("-y"));
+  const flag = (name: string) => argv[argv.indexOf(name) + 1];
+  const word = () => argv.slice(1).find((a) => !a.startsWith("-"));
+  try {
+    switch (argv[0]) {
+      case "setup":
+        return await setup(io, argv.includes("--client") ? flag("--client") : undefined);
+      case "fund":
+        return await fund(io, loadConfig(), word() ? Number(word()) : undefined);
+      case "status":
+        return await status(io, loadConfig());
+      case "install":
+        return await install(io, argv.includes("--client") ? flag("--client") : word());
+      default:
+        io.say(HELP);
+        return argv[0] && !/^(help|--help|-h)$/.test(argv[0]) ? 2 : 0;
+    }
+  } catch (e: any) {
+    io.say(`\nStopped: ${e?.shortMessage || e?.message || e}`);
+    return 1;
+  } finally {
+    io.close();
+  }
+}
+
+async function setup(io: Io, client?: string): Promise<number> {
+  let cfg = loadConfig();
+  const testnet = cfg.chainId === 11155111;
+  io.say(`Telegraph setup\n\nNetwork: chain ${cfg.chainId}${testnet ? " (Ethereum Sepolia, beta 2: test USDC, no real money)" : ""}`);
+  const intents = await getJson(`${cfg.url}/engine/v1/intents`, 20_000).then((d) => d.intents?.length ?? 0);
+  io.say(`Node:    ${cfg.url} (reachable, ${intents} intents)`);
+
+  if (cfg.privateKey) {
+    io.say(`\nWallet:  ${privateKeyToAccount(cfg.privateKey).address}, already set up.`);
+  } else {
+    io.say("\nTelegraph pays for asks from a wallet made only for this, never your main one.");
+    io.say("  1) Create a new wallet (recommended)\n  2) Import a private key you already have");
+    const key = (await io.ask("Choose [1]: ")) === "2" ? await io.importKey() : newKey();
+    if (!(await io.confirm(`Save it to ${walletPath(cfg.home)}, readable only by you?`, true))) return 1;
+    io.say(`Saved. Address ${saveWallet(cfg.home, key)}. The key stays in that file; no agent config holds it.`);
+    cfg = loadConfig();
+  }
+
+  const funded = await fund(io, cfg);
+  await install(io, client);
+  io.say(
+    funded === 0
+      ? '\nDone. Restart your agent app, then ask it: "What is the BTC price? Use Telegraph."'
+      : `\nOnce the wallet has USDC, run \`${RUN} fund\`, then restart your agent app.`,
+  );
+  return 0;
+}
+
+// Point the person at their address, network and balances, then move USDC into
+// escrow after they confirm the amount.
+async function fund(io: Io, cfg: Config, amount?: number): Promise<number> {
+  if (!cfg.privateKey) {
+    io.say(`No wallet yet. Run \`${RUN} setup\` first.`);
+    return 1;
+  }
+  const account = privateKeyToAccount(cfg.privateKey);
+  const chain = new Chain(cfg);
+  const a = await chain.account(account.address);
+  const testnet = cfg.chainId === 11155111;
+  io.say(`\nWallet ${a.address} on ${a.network}`);
+  io.say(`  holds  ${a.wallet_usdc} USDC and ${a.wallet_eth} ETH for gas`);
+  io.say(`  escrow ${a.escrow.spendable_usdc} USDC spendable${a.escrow.debt_usdc ? `, ${a.escrow.debt_usdc} USDC debt` : ""}`);
+  io.say(`  USDC   ${a.usdc_token}${testnet ? " (beta 2's test token, not Circle's)" : ""}`);
+  io.say("  An ask costs about $0.01, so $1 covers about 100 of them.");
+
+  const want = amount ?? Number((await io.ask("How much USDC to move into escrow? [1]: ")) || 1);
+  if (!(want > 0)) return 0;
+  if (a.wallet_eth < 0.0005) {
+    io.say(`\nThe wallet needs a little ETH for two transactions. Send some${testnet ? " Sepolia ETH (any public faucet)" : ""} to ${a.address}, then run \`${RUN} fund\`.`);
+    return 1;
+  }
+  if (a.wallet_usdc < want) {
+    io.say(
+      `\nThe wallet holds ${a.wallet_usdc} USDC. Send at least ${want} USDC on ${a.network} to ${a.address}` +
+        `${testnet ? `: claim it at ${FAUCET} (sign in, 1 USDC per account every 24 hours)` : ""}, then run \`${RUN} fund\`.`,
+    );
+    return 1;
+  }
+  if (!(await io.confirm(`Move ${want} USDC into Telegraph escrow (approve, then deposit: two transactions)?`, false))) return 1;
+  const r = await chain.deposit(account, want);
+  io.say(`Deposited. Escrow now ${r.escrow_now.spendable_usdc} USDC spendable. Transactions: ${r.transactions.join(", ")}`);
+  return 0;
+}
+
+async function status(io: Io, cfg: Config): Promise<number> {
+  if (!cfg.privateKey) {
+    io.say(`No wallet yet. Run \`${RUN} setup\`.`);
+    return 1;
+  }
+  const a = await new Chain(cfg).account(privateKeyToAccount(cfg.privateKey).address);
+  const limits = { max_per_ask_usd: cfg.maxAskUsd, daily_usd: cfg.dailyLimitUsd, spent_today_usd: new SpendLog(cfg.home).today() };
+  io.say(JSON.stringify({ ...a, node: cfg.url, payment: cfg.payment, limits }, null, 2));
+  return 0;
+}
+
+// Where each app keeps its MCP servers. Only formats known for certain are
+// written; any other app gets the entry printed to paste in.
+function configFile(app: string): { file: string; toml?: boolean } | undefined {
+  const h = homedir();
+  if (app === "cursor") return { file: join(h, ".cursor/mcp.json") };
+  if (app === "codex") return { file: join(h, ".codex/config.toml"), toml: true };
+  if (app !== "claude-desktop") return undefined;
+  if (platform() === "darwin") return { file: join(h, "Library/Application Support/Claude/claude_desktop_config.json") };
+  if (platform() === "win32") return { file: join(process.env.APPDATA || join(h, "AppData/Roaming"), "Claude/claude_desktop_config.json") };
+  return { file: join(h, ".config/Claude/claude_desktop_config.json") };
+}
+
+async function install(io: Io, which?: string): Promise<number> {
+  const app = (which || (await io.ask("\nAdd Telegraph to which app (claude-desktop, cursor, codex, claude-code; empty to skip)? "))).toLowerCase();
+  if (!app || app === "none" || app === "skip") return 0;
+  if (app === "claude-code") {
+    io.say(`\nRun this once: claude mcp add --scope user telegraph -- ${RUN}`);
+    return 0;
+  }
+  const target = configFile(app);
+  if (!target) {
+    io.say(
+      `\nAdd this MCP server in ${app}'s own settings (examples/ in the repo has ready files for Hermes, OpenClaw, Goose, Continue and ElizaOS):\n` +
+        `  ${JSON.stringify({ mcpServers: { telegraph: SERVER } })}\nNo key or setting is needed: the wallet from setup is used.`,
+    );
+    return 0;
+  }
+  if (!(await io.confirm(`Add Telegraph to ${target.file}? (the old file is kept as .bak)`, true))) return 1;
+  mkdirSync(dirname(target.file), { recursive: true });
+  const text = existsSync(target.file) ? readFileSync(target.file, "utf8") : "";
+  if (text) copyFileSync(target.file, `${target.file}.bak`);
+  if (target.toml) {
+    if (/^\[mcp_servers\.telegraph\]/m.test(text)) {
+      io.say(`${target.file} already has [mcp_servers.telegraph]; left as it is.`);
+      return 0;
+    }
+    const entry = `[mcp_servers.telegraph]\ncommand = ${JSON.stringify(SERVER.command)}\nargs = ${JSON.stringify(SERVER.args)}\n`;
+    writeFileSync(target.file, `${text}${!text || text.endsWith("\n") ? "" : "\n"}\n${entry}`);
+  } else {
+    const doc = text ? JSON.parse(text) : {};
+    doc.mcpServers = { ...doc.mcpServers, telegraph: SERVER };
+    writeFileSync(target.file, JSON.stringify(doc, null, 2) + "\n");
+  }
+  io.say(`Added. Restart ${app} to load it.`);
+  return 0;
+}
+
+// Questions for a person at a terminal. With --yes every question takes its
+// default and every confirmation is a yes, for scripts and tests.
+class Io {
+  private rl = createInterface({ input: process.stdin, output: process.stdout });
+
+  constructor(private yes: boolean) {}
+
+  say(s: string) {
+    process.stdout.write(s + "\n");
+  }
+
+  async ask(q: string): Promise<string> {
+    return this.yes ? "" : (await this.rl.question(q)).trim();
+  }
+
+  async confirm(q: string, dflt: boolean): Promise<boolean> {
+    if (this.yes) {
+      this.say(`${q} yes (--yes)`);
+      return true;
+    }
+    const a = (await this.rl.question(`${q} [${dflt ? "Y/n" : "y/N"}] `)).trim().toLowerCase();
+    return a ? a.startsWith("y") : dflt;
+  }
+
+  // Reads a private key without echoing it, so it stays out of the terminal.
+  async importKey(): Promise<`0x${string}`> {
+    const out = process.stdout as any;
+    const write = out.write.bind(out);
+    const q = "Paste the private key (hidden): ";
+    out.write = (c: any, ...r: any[]) => (String(c).startsWith(q) ? write(q, ...r) : true);
+    try {
+      const raw = (await this.rl.question(q)).trim();
+      return (raw.startsWith("0x") ? raw : `0x${raw}`) as `0x${string}`;
+    } finally {
+      out.write = write;
+      write("\n");
+    }
+  }
+
+  close() {
+    this.rl.close();
+  }
+}

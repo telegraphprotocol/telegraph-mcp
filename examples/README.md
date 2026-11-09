@@ -16,18 +16,19 @@ Each example is self-contained with its own `package.json` / `requirements.txt`,
 | **Goose** | [`goose/`](./goose/) | Config | ✅ Ready | `config.yaml` — copy to `~/.config/goose/` |
 | **VS Code Continue** | [`vscode-continue/`](./vscode-continue/) | Config | ✅ Ready | `config.json` — merge into Continue settings |
 | **ElizaOS** | [`elizaos-telegraph/`](./elizaos-telegraph/) | TypeScript | v2, not re-tested | Full agent with `@elizaos/plugin-mcp` |
+| **Hermes Agent** | [`hermes/`](./hermes/) | Config | Ready, not tested in app | `mcp_servers` block for `~/.hermes/config.yaml` |
+| **Codex** | [`codex/`](./codex/) | Config | Ready, not tested in app | `[mcp_servers.telegraph]` for `~/.codex/config.toml` (or `install codex`) |
 
 ## Tested ✅ = MCP connection works, tools discovered, free + paid tool calls succeed
 ## Ready ✅ = Config files created with correct env vars. Desktop app needed to fully test.
 
 ## Quick Start
 
-1. **Set up the MCP server** (from repo root):
+1. **Set up once** (any folder):
    ```bash
-   npm install && npm run build
-   cp .env.example .env
-   # Edit .env: set TELEGRAPH_PRIVATE_KEY
+   npx -y @telegraphprotocol/telegraph-protocol-mcp setup
    ```
+   It makes a wallet just for Telegraph, funds its escrow after you confirm, and can add the server to your app. No config below needs a key.
 
 2. **Run the LangChain or Pure MCP test**:
    ```bash
@@ -50,13 +51,13 @@ AI Framework (LangChain / Claude / Cursor / etc.)
     ▼
 Telegraph MCP Server  ←  you run this alongside the framework
     │
-    │ HTTP + x402 payment
+    │ HTTP, paid from escrow
     │
     ▼
 Telegraph Node / Engine / Daemon  ←  running at devnode.telegraphprotocol.com
 ```
 
-The framework connects to the Telegraph MCP server as an **MCP client**. The MCP server handles all x402 payment signing internally — the framework and its LLM never see the private key.
+The framework connects to the Telegraph MCP server as an **MCP client**. The MCP server signs every escrow payment itself: the framework and its model never see the key, which stays in `~/.telegraph/wallet.json`.
 
 ## Framework Integration Reference
 

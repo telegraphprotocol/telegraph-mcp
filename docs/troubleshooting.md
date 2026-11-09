@@ -6,13 +6,13 @@ Check the server starts: `npx -y @telegraphprotocol/telegraph-protocol-mcp` shou
 
 ## "Paying needs a wallet"
 
-Set `TELEGRAPH_PRIVATE_KEY` in the client's config for this server and restart the client.
+Run `npx -y @telegraphprotocol/telegraph-protocol-mcp setup` in a terminal, then restart the client. A server or CI run can set `TELEGRAPH_PRIVATE_KEY` instead.
 
 ## Free tools fail with a network error
 
 The node at `TELEGRAPH_URL` is unreachable from this machine. Try `curl $TELEGRAPH_URL/api/epoch`.
 
-## `telegraph_account` or `telegraph_deposit` fails
+## `telegraph_account`, `fund` or `status` fails
 
 They need the chain RPC (`TELEGRAPH_RPC_URL`). Public RPCs are sometimes down; set another Sepolia RPC.
 

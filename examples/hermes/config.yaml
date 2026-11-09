@@ -1,0 +1,5 @@
+# Merge into ~/.hermes/config.yaml, then run /reload-mcp in a chat (or restart Hermes).
+mcp_servers:
+  telegraph:
+    command: npx
+    args: ["-y", "@telegraphprotocol/telegraph-protocol-mcp"]

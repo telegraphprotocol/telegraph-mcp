@@ -54,6 +54,10 @@ export class Chain {
     return {
       address,
       network: `eip155:${this.cfg.chainId}`,
+      // Which token is actually spent, and which contract holds the escrow:
+      // both read from the chain, so they follow the node's network.
+      usdc_token: usdc,
+      escrow_contract: this.cfg.diamond,
       wallet_usdc: usd(wallet),
       wallet_eth: Number(formatUnits(eth, 18)),
       escrow: {
