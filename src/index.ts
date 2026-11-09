@@ -18,6 +18,12 @@ const INSTRUCTIONS =
 async function main() {
   // A person running a command (setup, fund, status, install); with none, an MCP client is starting the server.
   const args = process.argv.slice(2);
+  // The hosted server for connectors (Claude, ChatGPT, Grok): `serve --http`.
+  if (args[0] === "serve" && args.includes("--http")) {
+    const { serveRemote } = await import("./remote.js");
+    return serveRemote(version);
+  }
+  if (args[0] === "--stdio") args.shift();
   if (args.length || process.stdin.isTTY) {
     const { runCli } = await import("./cli.js");
     process.exit(await runCli(args));

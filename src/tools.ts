@@ -8,12 +8,12 @@ import { Chain } from "./chain.js";
 import { cached, getJson } from "./http.js";
 import { loadGuides, searchGuides } from "./docs.js";
 
-type Text = { content: { type: "text"; text: string }[]; isError?: boolean };
+export type Text = { content: { type: "text"; text: string }[]; isError?: boolean };
 
-const ok = (v: unknown): Text => ({
+export const ok = (v: unknown): Text => ({
   content: [{ type: "text", text: typeof v === "string" ? v : JSON.stringify(v, null, 2) }],
 });
-const fail = (msg: string): Text => ({ content: [{ type: "text", text: msg }], isError: true });
+export const fail = (msg: string): Text => ({ content: [{ type: "text", text: msg }], isError: true });
 
 // Turns a thrown error into a tool error the model can read.
 const guard =
@@ -48,8 +48,15 @@ const trim = (s: unknown, n: number) => {
 const round = (x: number, d = 4) => Math.round(x * 10 ** d) / 10 ** d;
 const name = (s: string) => s.trim().toUpperCase();
 
-export function registerTools(server: McpServer, cfg: Config): Payer | undefined {
-  const payer = cfg.privateKey ? new Payer(cfg, cfg.privateKey) : undefined;
+// The hosted (connector) server pays through the signed-in person's own
+// account instead of a local wallet, so it supplies these instead of a Payer.
+export interface RemoteAccount {
+  ask(a: { question?: string; intent?: string; params?: Record<string, unknown> }): Promise<Text>;
+  account(): Promise<Text>;
+}
+
+export function registerTools(server: McpServer, cfg: Config, remote?: RemoteAccount): Payer | undefined {
+  const payer = !remote && cfg.privateKey ? new Payer(cfg, cfg.privateKey) : undefined;
   const chain = new Chain(cfg);
   const intents = cached(() => getJson(`${cfg.url}/engine/v1/intents`).then((d) => d.intents as any[]));
   const miners = cached(() => getJson(`${cfg.url}/engine/v1/miners`, 60_000).then((d) => d.miners as any[]));
@@ -90,10 +97,16 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
       inputSchema: askShape,
       annotations: paid,
     },
-    guard(async (a) => (payer ? answer(await payer.post("/engine/v1/ask", askBody(a))) : fail(NO_KEY))),
+    guard(async (a) => {
+      if (remote) {
+        askBody(a); // the same checks on the arguments
+        return remote.ask(a);
+      }
+      return payer ? answer(await payer.post("/engine/v1/ask", askBody(a))) : fail(NO_KEY);
+    }),
   );
 
-  server.registerTool(
+  if (!remote) server.registerTool(
     "telegraph_ask_miner",
     {
       title: "Ask one miner",
@@ -277,6 +290,7 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
       annotations: free,
     },
     guard(async ({ address }) => {
+      if (remote && !address) return remote.account();
       const who = address || payer?.account.address;
       if (!who) return fail(NO_KEY);
       if (!/^0x[0-9a-fA-F]{40}$/.test(who)) return fail(`Not an address: ${who}`);
@@ -291,7 +305,7 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
     }),
   );
 
-  if (cfg.agentDeposit) server.registerTool(
+  if (cfg.agentDeposit && !remote) server.registerTool(
     "telegraph_deposit",
     {
       title: "Deposit to escrow",
