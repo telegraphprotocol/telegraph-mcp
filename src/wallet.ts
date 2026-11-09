@@ -7,10 +7,21 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 
 export const walletPath = (home: string) => join(home, "wallet.json");
 
+// A file that cannot be read gives no key rather than throwing, so a damaged
+// wallet never stops the server for the free tools. `walletUnreadable` tells
+// the person why they are being asked to set up again.
 export function readWalletKey(home: string): string | undefined {
   const file = walletPath(home);
-  return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")).privateKey : undefined;
+  if (!existsSync(file)) return undefined;
+  try {
+    const key = JSON.parse(readFileSync(file, "utf8")).privateKey;
+    return typeof key === "string" && /^0x[0-9a-fA-F]{64}$/.test(key.trim()) ? key.trim() : undefined;
+  } catch {
+    return undefined;
+  }
 }
+
+export const walletUnreadable = (home: string) => existsSync(walletPath(home)) && readWalletKey(home) === undefined;
 
 // Refuses to replace a wallet that already exists: it may hold funds.
 export function saveWallet(home: string, key: `0x${string}`): `0x${string}` {

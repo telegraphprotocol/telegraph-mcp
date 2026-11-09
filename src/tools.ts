@@ -386,11 +386,16 @@ function hintFor(status: number, b: any, oneMiner: boolean): string | undefined 
   if (err === "invalid_params") return "The params don't fit the intent. telegraph_intent lists the params it takes.";
   if (err === "no_input_schema") return "This intent takes no params. Send only a question.";
   if (status === 429) return "Too many new questions this minute. Wait a minute, then retry.";
-  if (status === 402)
+  if (status === 402) {
+    // The node refuses for more than a short balance: an agent over its charge
+    // limit, or one whose deliveries are suspended until its debt is repaid.
+    // Pass its own words through instead of guessing which it was.
+    const why = String(b?.reason || b?.error || "").trim();
     return (
-      "Payment refused: the escrow balance could not cover this ask, and nothing was charged. telegraph_account " +
-      `shows the balances; the user tops up by running \`${RUN} fund\` in a terminal and confirming the amount.`
+      `Payment from escrow refused${why ? ` (the node says: ${why})` : ""}, and nothing was charged. telegraph_account ` +
+      `shows the balance and anything owed; the user fixes it by running \`${RUN} fund\` in a terminal and confirming the amount.`
     );
+  }
   if (status === 503) return "The node could not route this now. Nothing was charged; try again shortly.";
   if (status >= 500) return "The miner or node failed. Escrow never bills a failed ask; an x402 payment is credited to escrow.";
   return undefined;

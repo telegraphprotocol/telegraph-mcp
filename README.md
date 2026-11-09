@@ -19,6 +19,9 @@ It checks the network and creates a wallet just for Telegraph. You can import a 
 **3. Ask it something:** "What is the BTC price? Use Telegraph." Every ask after that is paid from escrow on its own.
 
 Top up any time with `npx -y @telegraphprotocol/telegraph-protocol-mcp fund`. Check balances with `... status`.
+Take USDC back out with `... withdraw`: it requests the amount, and you run it again to collect once the network has settled it.
+
+Back up `~/.telegraph/wallet.json`. It is the only copy of the key, and the escrow balance goes with it.
 
 ## Adding it to an app by hand
 
@@ -77,9 +80,10 @@ Beta 2 runs on Ethereum Sepolia, so there's no real money. Its USDC (`0xcc194e1a
 
 ## Security
 
-- The key lives in `~/.telegraph/wallet.json` (mode 0600), or in `TELEGRAPH_PRIVATE_KEY` if you set one. It's never in an agent's config, a tool result or a log, so the agent and its model never see it.
+- The key lives in `~/.telegraph/wallet.json` (mode 0600), or in `TELEGRAPH_PRIVATE_KEY` if you set one. It's never in an agent's config, a tool result or a log, so the agent and its model never see it through MCP.
 - Use a wallet made for this, holding only what you plan to spend. The limits cap what the agent can spend.
-- By default the agent can't move funds: deposits happen in your terminal, after you confirm.
+- By default the agent gets no tool that moves funds: deposits and withdrawals happen in your terminal, after you confirm.
+- That holds for the tools. An agent that can also run shell commands (Claude Code, Codex, Cursor) can read the wallet file or run `fund` itself, so the real protection is the dedicated wallet and the limits, not the tool list.
 - The server runs locally over stdio and opens no port.
 
 ## Development

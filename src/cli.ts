@@ -6,7 +6,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { loadConfig, type Config } from "./config.js";
 import { Chain } from "./chain.js";
 import { SpendLog } from "./limits.js";
-import { newKey, saveWallet, walletPath } from "./wallet.js";
+import { newKey, saveWallet, walletPath, walletUnreadable } from "./wallet.js";
 import { getJson } from "./http.js";
 import { RUN, SERVER } from "./tools.js";
 
@@ -20,6 +20,7 @@ const HELP = `Telegraph MCP server
 
   ${RUN} setup          make a wallet, fund it, and add Telegraph to your agent
   ${RUN} fund [usd]     move USDC into escrow (you confirm first)
+  ${RUN} withdraw [usd] take USDC back out: request it, then run it again to collect
   ${RUN} status         balances, limits and what today's asks have cost
   ${RUN} install [app]  add Telegraph to claude-desktop, cursor, codex or claude-code (any other app: it prints the entry)
 
@@ -29,12 +30,21 @@ export async function runCli(argv: string[]): Promise<number> {
   const io = new Io(argv.includes("--yes") || argv.includes("-y"));
   const flag = (name: string) => argv[argv.indexOf(name) + 1];
   const word = () => argv.slice(1).find((a) => !a.startsWith("-"));
+  // An amount that is not a number is a mistake worth saying out loud.
+  const usd = () => {
+    const raw = word();
+    if (raw === undefined) return undefined;
+    if (!(Number(raw) > 0)) throw new Error(`"${raw}" is not an amount. Try \`${RUN} ${argv[0]} 2\`.`);
+    return Number(raw);
+  };
   try {
     switch (argv[0]) {
       case "setup":
         return await setup(io, argv.includes("--client") ? flag("--client") : undefined);
       case "fund":
-        return await fund(io, loadConfig(), word() ? Number(word()) : undefined);
+        return await fund(io, loadConfig(), usd());
+      case "withdraw":
+        return await withdraw(io, loadConfig(), usd());
       case "status":
         return await status(io, loadConfig());
       case "install":
@@ -66,6 +76,8 @@ async function setup(io: Io, client?: string): Promise<number> {
     const key = (await io.ask("Choose [1]: ")) === "2" ? await io.importKey() : newKey();
     if (!(await io.confirm(`Save it to ${walletPath(cfg.home)}, readable only by you?`, true))) return 1;
     io.say(`Saved. Address ${saveWallet(cfg.home, key)}. The key stays in that file; no agent config holds it.`);
+    // Said before any money goes in, while there is nothing to lose yet.
+    io.say(`Back up ${walletPath(cfg.home)} now. It is the only copy: lose it and the USDC in escrow is gone with it.`);
     cfg = loadConfig();
   }
 
@@ -81,11 +93,18 @@ async function setup(io: Io, client?: string): Promise<number> {
 
 // Point the person at their address, network and balances, then move USDC into
 // escrow after they confirm the amount.
-async function fund(io: Io, cfg: Config, amount?: number): Promise<number> {
-  if (!cfg.privateKey) {
+// No usable key: either none yet, or a wallet file that cannot be read.
+function noWallet(io: Io, cfg: Config): number {
+  if (walletUnreadable(cfg.home)) {
+    io.say(`${walletPath(cfg.home)} cannot be read, so its escrow cannot be reached. Restore your backup, or move the file aside and run \`${RUN} setup\` for a new wallet.`);
+  } else {
     io.say(`No wallet yet. Run \`${RUN} setup\` first.`);
-    return 1;
   }
+  return 1;
+}
+
+async function fund(io: Io, cfg: Config, amount?: number): Promise<number> {
+  if (!cfg.privateKey) return noWallet(io, cfg);
   const account = privateKeyToAccount(cfg.privateKey);
   const chain = new Chain(cfg);
   const a = await chain.account(account.address);
@@ -97,7 +116,10 @@ async function fund(io: Io, cfg: Config, amount?: number): Promise<number> {
   io.say("  An ask costs about $0.01, so $1 covers about 100 of them.");
 
   const want = amount ?? Number((await io.ask("How much USDC to move into escrow? [1]: ")) || 1);
-  if (!(want > 0)) return 0;
+  if (!(want > 0)) {
+    io.say("Not an amount; nothing was moved.");
+    return 1;
+  }
   if (a.wallet_eth < 0.0005) {
     io.say(`\nThe wallet needs a little ETH for two transactions. Send some${testnet ? " Sepolia ETH (any public faucet)" : ""} to ${a.address}, then run \`${RUN} fund\`.`);
     return 1;
@@ -115,11 +137,49 @@ async function fund(io: Io, cfg: Config, amount?: number): Promise<number> {
   return 0;
 }
 
-async function status(io: Io, cfg: Config): Promise<number> {
-  if (!cfg.privateKey) {
-    io.say(`No wallet yet. Run \`${RUN} setup\`.`);
+// Taking money back out: two transactions with a wait between them. Run once to
+// request it, again to collect it.
+async function withdraw(io: Io, cfg: Config, amount?: number): Promise<number> {
+  if (!cfg.privateKey) return noWallet(io, cfg);
+  const account = privateKeyToAccount(cfg.privateKey);
+  const chain = new Chain(cfg);
+  const a = await chain.account(account.address);
+
+  if (a.escrow.pending_withdrawal_usdc > 0) {
+    const u = await chain.withdrawalUnlock(account.address);
+    if (!u.unlocked) {
+      io.say(`\n${a.escrow.pending_withdrawal_usdc} USDC is already requested. It unlocks once the network settles block ${u.unlockSequence}, or at ${u.unlockAt.toISOString()} at the latest. Run \`${RUN} withdraw\` again then.`);
+      return 1;
+    }
+    if (!(await io.confirm(`\nSend the requested ${a.escrow.pending_withdrawal_usdc} USDC to ${a.address}?`, true))) return 1;
+    const done = await chain.executeWithdraw(account);
+    io.say(`Withdrawn. Wallet now ${done.wallet_usdc} USDC; escrow ${done.escrow_now.spendable_usdc} USDC spendable. Transaction: ${done.transaction}`);
+    return 0;
+  }
+
+  io.say(`\nEscrow ${a.escrow.spendable_usdc} USDC spendable${a.escrow.debt_usdc ? `, ${a.escrow.debt_usdc} USDC owed for asks already served` : ""}`);
+  if (!(a.escrow.spendable_usdc > 0)) {
+    io.say("There is nothing to take out.");
     return 1;
   }
+  const want = amount ?? Number((await io.ask(`How much USDC to take out? [${a.escrow.spendable_usdc}]: `)) || a.escrow.spendable_usdc);
+  if (!(want > 0)) {
+    io.say("Not an amount; nothing was requested.");
+    return 1;
+  }
+  if (want > a.escrow.spendable_usdc) {
+    io.say(`Only ${a.escrow.spendable_usdc} USDC is spendable.`);
+    return 1;
+  }
+  io.say("The amount stops paying for asks straight away, and what is already owed is still settled from it before it is paid out.");
+  if (!(await io.confirm(`Request ${want} USDC out of escrow?`, false))) return 1;
+  const r = await chain.requestWithdraw(account, want);
+  io.say(`Requested. It unlocks once the network settles block ${r.unlock.unlockSequence}, or at ${r.unlock.unlockAt.toISOString()} at the latest. Run \`${RUN} withdraw\` then to collect it.`);
+  return 0;
+}
+
+async function status(io: Io, cfg: Config): Promise<number> {
+  if (!cfg.privateKey) return noWallet(io, cfg);
   const a = await new Chain(cfg).account(privateKeyToAccount(cfg.privateKey).address);
   const limits = { max_per_ask_usd: cfg.maxAskUsd, daily_usd: cfg.dailyLimitUsd, spent_today_usd: new SpendLog(cfg.home).today() };
   io.say(JSON.stringify({ ...a, node: cfg.url, payment: cfg.payment, limits }, null, 2));

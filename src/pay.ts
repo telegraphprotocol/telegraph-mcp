@@ -50,8 +50,10 @@ export class Payer {
     return repeated ? { ...value, repeated: true } : value;
   }
 
-  // Refuses to sign a payment over the per-ask or the daily limit.
-  private allow(usd: number) {
+  // Refuses to sign a payment over the per-ask or the daily limit, and counts
+  // the cost before signing, so asks running at the same time cannot all pass
+  // the check. The caller gives it back when nothing was charged.
+  private reserve(usd: number) {
     const { maxAskUsd: max, dailyLimitUsd: daily } = this.cfg;
     const today = this.spent.today();
     if (max > 0 && usd > max) throw new Error(`This ask costs $${usd}, over the $${max} limit per ask (TELEGRAPH_MAX_ASK_USD). Nothing was paid.`);
@@ -61,6 +63,7 @@ export class Payer {
           "(TELEGRAPH_DAILY_LIMIT_USD). Nothing was paid. The limit resets at midnight UTC.",
       );
     }
+    this.spent.add(usd);
   }
 
   private async pay(path: string, body: unknown): Promise<PaidResponse> {
@@ -81,16 +84,21 @@ export class Payer {
     const tryEscrow = this.cfg.payment === "escrow" || (this.cfg.payment === "auto" && Date.now() >= this.escrowEmptyUntil);
     if (escrow && tryEscrow) {
       const priceUsd = usdOf(escrow.amount);
-      this.allow(priceUsd);
-      const res = await send({ "X-PAYMENT": await this.escrowHeader(escrow) });
-      const resBody = await readJson(res);
-      if (res.status >= 200 && res.status < 300) this.spent.add(priceUsd); // escrow bills only a delivered ask
-      if (res.status !== 402 || this.cfg.payment === "escrow") {
-        const refused = res.status === 402 ? String(resBody?.reason || resBody?.error || "refused") : undefined;
-        return { status: res.status, body: resBody, rail: "escrow", receipt: receiptOf(res), escrowRefused: refused, priceUsd };
+      this.reserve(priceUsd);
+      let charged = false;
+      try {
+        const res = await send({ "X-PAYMENT": await this.escrowHeader(escrow) });
+        const resBody = await readJson(res);
+        charged = res.status >= 200 && res.status < 300; // escrow bills only a delivered ask
+        if (res.status !== 402 || this.cfg.payment === "escrow") {
+          const refused = res.status === 402 ? String(resBody?.reason || resBody?.error || "refused") : undefined;
+          return { status: res.status, body: resBody, rail: "escrow", receipt: receiptOf(res), escrowRefused: refused, priceUsd };
+        }
+        escrowRefused = String(resBody?.reason || resBody?.error || "refused");
+        if (escrowRefused.includes("insufficient")) this.escrowEmptyUntil = Date.now() + ESCROW_SKIP_MS;
+      } finally {
+        if (!charged) this.spent.add(-priceUsd);
       }
-      escrowRefused = String(resBody?.reason || resBody?.error || "refused");
-      if (escrowRefused.includes("insufficient")) this.escrowEmptyUntil = Date.now() + ESCROW_SKIP_MS;
     }
 
     // Escrow mode never falls back to the wallet; and the node may offer no
@@ -103,11 +111,18 @@ export class Payer {
       );
     }
     const priceUsd = usdOf(exact[0].amount);
-    this.allow(priceUsd);
-    const payload = await this.http.createPaymentPayload({ ...required, accepts: exact });
-    const res = await send(this.http.encodePaymentSignatureHeader(payload));
-    this.spent.add(priceUsd); // x402 settles before the miner runs; a failed ask is credited to escrow
-    return { status: res.status, body: await readJson(res), rail: "x402", receipt: receiptOf(res), escrowRefused, priceUsd };
+    this.reserve(priceUsd);
+    let charged = false;
+    try {
+      const payload = await this.http.createPaymentPayload({ ...required, accepts: exact });
+      const res = await send(this.http.encodePaymentSignatureHeader(payload));
+      // x402 settles before the miner runs, so a failed ask is charged and
+      // credited back to escrow. A payment the node refuses charges nothing.
+      charged = res.status !== 402;
+      return { status: res.status, body: await readJson(res), rail: "x402", receipt: receiptOf(res), escrowRefused, priceUsd };
+    } finally {
+      if (!charged) this.spent.add(-priceUsd);
+    }
   }
 
   // The scheme "escrow" X-PAYMENT header: a personal_sign of the challenge's

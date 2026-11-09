@@ -130,6 +130,16 @@ const none = await call(c, "telegraph_ask", { question: "BTC price" });
 check("no wallet: the agent is told the one command to run", none.isError && /setup/.test(none.text));
 await c.close();
 
+// 11. A mistyped amount is refused, not read as zero.
+const typo = cli(A.home, ["fund", "abc"]);
+check("a mistyped amount is refused with a message", typo.status === 1 && /not an amount/i.test(typo.stdout), typo.stdout.trim().slice(0, 80));
+
+// 12. Taking money back out: request it, then it waits for the unlock.
+const req = cli(A.home, ["withdraw", "1", "--yes"]);
+check("withdraw requests the amount and says when it unlocks", req.status === 0 && /Requested\./.test(req.stdout) && /unlocks/.test(req.stdout), req.stdout.trim().split("\n").pop()?.slice(0, 110));
+const pend = Number(JSON.parse(cli(A.home, ["status"]).stdout).escrow.pending_withdrawal_usdc);
+check("the request is pending on chain and locked until blocks settle", pend === 1 && /already requested/.test(cli(A.home, ["withdraw", "--yes"]).stdout), `pending ${pend} USDC`);
+
 const failed = results.filter((r) => !r.pass).length;
 console.log(`\n${results.length - failed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

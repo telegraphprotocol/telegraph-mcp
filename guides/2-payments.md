@@ -22,7 +22,17 @@ If an epoch charges more than your escrow holds, the rest becomes debt. While yo
 
 ## Withdrawing
 
-Call `requestWithdraw(amount)` on the Telegraph diamond (the contract that holds escrow) from your wallet. The amount stops being spendable at once. After the unlock time that `pendingWithdrawal(yourAddress)` shows, call `executeWithdraw()` to receive it. A new request replaces the pending one.
+Run `withdraw` and confirm the amount. It stops paying for asks at once, and what you already owe is still settled
+from it before it is paid out. It unlocks once the network settles two more blocks, or after the fallback delay the
+contract sets, whichever comes first; run `withdraw` again then and it is sent to your wallet.
+
+```bash
+npx -y @telegraphprotocol/telegraph-protocol-mcp withdraw 2    # request it
+npx -y @telegraphprotocol/telegraph-protocol-mcp withdraw      # collect it once unlocked
+```
+
+A new request replaces the pending one. Under the hood this is `requestWithdraw(amount)` then `executeWithdraw()` on
+the Telegraph diamond, which you can also call yourself.
 
 ## Choosing a mode
 

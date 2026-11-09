@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, statSync } from "node:fs";
+import { mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../dist/config.js";
-import { saveWallet, readWalletKey, newKey, walletPath } from "../dist/wallet.js";
+import { saveWallet, readWalletKey, newKey, walletPath, walletUnreadable } from "../dist/wallet.js";
 import { Dedupe, SpendLog, requestKey } from "../dist/limits.js";
 
 const home = () => mkdtempSync(join(tmpdir(), "tg-mcp-"));
@@ -86,4 +86,33 @@ test("a failed ask is not cached, so retrying it really retries", async () => {
 test("the request key ignores key order", () => {
   assert.equal(requestKey("/a", { x: 1, y: { b: 2, a: 1 } }), requestKey("/a", { y: { a: 1, b: 2 }, x: 1 }));
   assert.notEqual(requestKey("/a", { x: 1 }), requestKey("/b", { x: 1 }));
+});
+
+test("a damaged wallet file gives no key instead of throwing", () => {
+  const h = home();
+  writeFileSync(walletPath(h), "{ not json");
+  assert.equal(readWalletKey(h), undefined, "no key, and no exception");
+  assert.equal(walletUnreadable(h), true);
+  assert.equal(loadConfig({ TELEGRAPH_HOME: h }).privateKey, undefined, "the free tools still start");
+  assert.equal(walletUnreadable(home()), false, "no file at all is not a damaged file");
+});
+
+test("a reservation is counted at once and given back", () => {
+  const h = home();
+  const s = new SpendLog(h);
+  s.add(0.02);
+  assert.equal(s.today(), 0.02, "counted before the ask is answered");
+  s.add(-0.02);
+  assert.equal(s.today(), 0, "given back when nothing was charged");
+  s.add(-5);
+  assert.equal(s.today(), 0, "never goes below zero");
+});
+
+test("answers past the dedupe window are dropped, not kept for ever", async () => {
+  const d = new Dedupe(20);
+  const ok = () => true;
+  await d.run("a", ok, async () => 1);
+  await new Promise((r) => setTimeout(r, 40));
+  await d.run("b", ok, async () => 2);
+  assert.equal(d.size, 1, "only the live answer is held");
 });
