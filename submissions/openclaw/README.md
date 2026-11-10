@@ -27,13 +27,13 @@ After publish, verify:
 clawhub install telegraph   # in a scratch workspace
 ```
 
-and confirm the skill only activates when `mcpServers.telegraph` exists in `~/.openclaw/openclaw.json` (see `examples/openclaw/`).
+and confirm the skill only activates when `mcp.servers.telegraph` exists in `~/.openclaw/openclaw.json` (see `examples/openclaw/`).
 
 **Version bumps**: bump `metadata.version` in `skills/telegraph/SKILL.md`, re-run `clawhub publish` with the new `--version` and a `--changelog`.
 
 ## Track 2 — Bundled-skill PR to openclaw/openclaw (when we have traction)
 
-OpenClaw ships bundled skills with the install and filters them at load time via the `metadata.openclaw` gating block. Our skill gates on the `mcpServers.telegraph` config path, so bundling it adds **zero prompt overhead and zero attack surface** for users who haven't configured Telegraph — this is the core argument of the PR.
+OpenClaw ships bundled skills with the install and filters them at load time via the `metadata.openclaw` gating block. Our skill gates on the `mcp.servers.telegraph` config path, so bundling it adds **zero prompt overhead and zero attack surface** for users who haven't configured Telegraph — this is the core argument of the PR.
 
 Steps:
 
@@ -50,22 +50,21 @@ Title: feat(skills): add Telegraph Protocol skill (config-gated, dormant by defa
 
 Adds a bundled `telegraph` skill for the Telegraph network: ranked miners
 (APIs and models) answer questions by intent (prices, FX, weather, search,
-security, code review and 100+ others), paid per ask in USDC (escrow first,
-then x402) through a local MCP server.
+security, code review and 100+ others), paid per ask in USDC from a Telegraph escrow through a local MCP server.
 
 ## Why it is safe to bundle
 
 - **Dormant by default.** The skill gates on `requires.config:
-  ["mcpServers.telegraph"]` — it loads only for users who have explicitly
+  ["mcp.servers.telegraph"]` — it loads only for users who have explicitly
   added the Telegraph MCP server to `openclaw.json`. Everyone else pays zero
   prompt/token overhead and the skill is invisible to the agent.
 - **No new binaries or dependencies.** The MCP server runs via
   `npx -y @telegraphprotocol/telegraph-protocol-mcp` (MIT, published on npm, listed on the
   official MCP Registry as `io.github.telegraphprotocol/telegraph`).
-- **Key custody.** The wallet private key lives only in the MCP server's
-  process environment. OpenClaw and the model never see it; it never appears
-  in tool inputs/outputs. Only signed x402 payment authorizations leave the
-  machine. Docs mandate burner wallets; defaults point at Telegraph beta 2
+- **Key custody.** The wallet private key lives only in `~/.telegraph/wallet.json`
+  (mode 0600), read by the MCP server. OpenClaw and the model never see it; it
+  never appears in configs or tool inputs/outputs. Only signed escrow
+  authorizations, which can't move funds, leave the machine. Docs mandate burner wallets; defaults point at Telegraph beta 2
   on Ethereum Sepolia (testnet).
 - **Paid calls are explicit.** Free discovery, ranking and docs tools are clearly
   separated from paid inference tools in the skill text; typical paid call is
@@ -79,7 +78,7 @@ then x402) through a local MCP server.
 
 ## Testing
 
-Configured `mcpServers.telegraph` in `openclaw.json`, started a new session,
+Configured `mcp.servers.telegraph` in `openclaw.json`, started a new session,
 confirmed the skill loads and the agent calls `telegraph_find_miners` (free)
 and `telegraph_ask` (paid). Removed the config entry, confirmed the skill no
 longer loads. (Done with v1's tool names; repeat with v2 before submitting.)
@@ -87,8 +86,8 @@ longer loads. (Done with v1's tool names; repeat with v2 before submitting.)
 
 ## Security statement (reuse in any review thread)
 
-> The Telegraph MCP server holds the wallet key in its own process
-> environment, signs x402/EIP-3009 USDC transfer authorizations locally, and
+> The Telegraph MCP server reads the wallet key from a file only the user can
+> read, signs escrow payment authorizations locally (they can't move funds), and
 > exposes only inference tools to the agent. The key is never part of model
 > context, tool schemas, or tool results. Users are instructed to use a
 > dedicated burner wallet funded with only the USDC they intend to spend.

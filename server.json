@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.telegraphprotocol/telegraph",
-  "description": "Ask the Telegraph network's ranked miners, browse intents, miners and rankings; pay in USDC from escrow or by x402.",
+  "description": "Ranked machine intelligence for any agent: ask Telegraph's top miners, browse intents and rankings. Paid automatically from a USDC escrow; run `setup` once.",
   "repository": {
     "url": "https://github.com/telegraphprotocol/telegraph-mcp",
     "source": "github"
@@ -18,7 +18,7 @@
       "environmentVariables": [
         {
           "name": "TELEGRAPH_PRIVATE_KEY",
-          "description": "0x private key of a wallet made for paying asks (USDC). Without it only the free tools work.",
+          "description": "Optional: a 0x key instead of the wallet that `setup` saves to ~/.telegraph. Without either, only the free tools work.",
           "isRequired": false,
           "isSecret": true,
           "format": "string"
@@ -31,13 +31,25 @@
         },
         {
           "name": "TELEGRAPH_PAYMENT",
-          "description": "auto (escrow first, then x402), escrow or x402. Default auto.",
+          "description": "escrow (default), auto (escrow, then x402) or x402.",
           "isRequired": false,
           "format": "string"
         },
         {
           "name": "TELEGRAPH_RPC_URL",
           "description": "Chain RPC for the balance and deposit tools. Default: a public Sepolia RPC.",
+          "isRequired": false,
+          "format": "string"
+        },
+        {
+          "name": "TELEGRAPH_MAX_ASK_USD",
+          "description": "Most one ask may cost. Default 0.5.",
+          "isRequired": false,
+          "format": "string"
+        },
+        {
+          "name": "TELEGRAPH_DAILY_LIMIT_USD",
+          "description": "Most all asks may cost in a UTC day. Default 5.",
           "isRequired": false,
           "format": "string"
         }

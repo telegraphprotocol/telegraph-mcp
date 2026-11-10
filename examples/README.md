@@ -1,33 +1,28 @@
 # Telegraph MCP — Framework Examples
 
-Ready-to-run examples connecting popular AI frameworks to the Telegraph decentralized AI inference network via MCP.
+Setup for the nine integrations on the Anjoman Integrations page. Every one runs the server on your own computer over stdio: no server to host and no key in any config.
 
-Each example is self-contained with its own `package.json` / `requirements.txt`, `.env.example`, and `README.md`.
+## The nine integrations
 
-## Available Examples
-
-| Framework | Directory | Type | Status | Notes |
-|-----------|-----------|------|--------|-------|
-| **LangChain** | [`langchain/`](./langchain/) | Python agent | v2, not re-tested | `langchain-mcp-adapters` |
-| **Pure MCP** | [`pure-mcp/`](./pure-mcp/) | Python script | ✅ Tested | Raw MCP SDK test — validates server for any client |
-| **Claude Desktop** | [`claude/`](./claude/) | Config | ✅ Ready | `claude_desktop_config.json` — copy to Claude settings |
-| **Cursor** | [`cursor/`](./cursor/) | Config | ✅ Ready | `cursor_mcp_config.json` — paste into Cursor MCP settings |
-| **OpenClaw** | [`openclaw/`](./openclaw/) | Config + Skill | ✅ Ready | npx `mcpServers` entry for `~/.openclaw/openclaw.json` + config-gated skill ([`skills/telegraph`](../skills/telegraph/)) |
-| **Goose** | [`goose/`](./goose/) | Config | ✅ Ready | `config.yaml` — copy to `~/.config/goose/` |
-| **VS Code Continue** | [`vscode-continue/`](./vscode-continue/) | Config | ✅ Ready | `config.json` — merge into Continue settings |
-| **ElizaOS** | [`elizaos-telegraph/`](./elizaos-telegraph/) | TypeScript | v2, not re-tested | Full agent with `@elizaos/plugin-mcp` |
-
-## Tested ✅ = MCP connection works, tools discovered, free + paid tool calls succeed
-## Ready ✅ = Config files created with correct env vars. Desktop app needed to fully test.
+| Integration | Directory | How it was checked |
+|-------------|-----------|--------------------|
+| **Claude Desktop** | [`claude/`](./claude/) | Config from `install claude-desktop`, server started from it. Not opened in the app. |
+| **Cursor** | [`cursor/`](./cursor/) | Config from `install cursor`, server started from it. Not opened in the app. |
+| **Claude Code** | none: `claude mcp add --scope user telegraph -- npx -y @telegraphprotocol/telegraph-protocol-mcp` | `claude mcp list` shows it connected. |
+| **Continue** | [`vscode-continue/`](./vscode-continue/) | Passes Continue's own config schema, server started from it. Not opened in the app. |
+| **Goose** | [`goose/`](./goose/) | Fields match Goose's config type, server started from it. Not opened in the app. |
+| **OpenClaw** | [`openclaw/`](./openclaw/) | `openclaw mcp add` and `doctor --probe` pass, tools listed. |
+| **LangChain** | [`langchain/`](./langchain/) | `agent.py` runs, free tools answer through `langchain-mcp-adapters`. |
+| **ElizaOS** | [`elizaos-telegraph/`](./elizaos-telegraph/) | `character.ts` loaded by `@elizaos/plugin-mcp`, server connected, 8 tools. |
+| **Any MCP client** | [`pure-mcp/`](./pure-mcp/) | `test_mcp.py` lists the tools and calls a free one. |
 
 ## Quick Start
 
-1. **Set up the MCP server** (from repo root):
+1. **Set up once** (any folder):
    ```bash
-   npm install && npm run build
-   cp .env.example .env
-   # Edit .env: set TELEGRAPH_PRIVATE_KEY
+   npx -y @telegraphprotocol/telegraph-protocol-mcp setup
    ```
+   It makes a wallet just for Telegraph, funds its escrow after you confirm, and can add the server to your app. No config below needs a key.
 
 2. **Run the LangChain or Pure MCP test**:
    ```bash
@@ -50,23 +45,10 @@ AI Framework (LangChain / Claude / Cursor / etc.)
     ▼
 Telegraph MCP Server  ←  you run this alongside the framework
     │
-    │ HTTP + x402 payment
+    │ HTTP, paid from escrow
     │
     ▼
 Telegraph Node / Engine / Daemon  ←  running at devnode.telegraphprotocol.com
 ```
 
-The framework connects to the Telegraph MCP server as an **MCP client**. The MCP server handles all x402 payment signing internally — the framework and its LLM never see the private key.
-
-## Framework Integration Reference
-
-| Framework | MCP Library/Plugin | Transport | Test Status |
-|-----------|-------------------|-----------|-------------|
-| LangChain | `langchain-mcp-adapters` | stdio | v1 tested; updated for v2 (9 tools), not re-tested |
-| Pure MCP | `mcp` (Python SDK) | stdio | v1 tested; updated for v2 (9 tools) |
-| Claude Desktop | Built-in MCP support | stdio | ✅ Config ready |
-| Cursor | Built-in MCP support | stdio | ✅ Config ready |
-| OpenClaw | `mcpServers` config | stdio | ✅ Config ready |
-| Goose | `extensions` config | stdio | ✅ Config ready |
-| VS Code Continue | `modelContextProtocolServers` | stdio | ✅ Config ready |
-| ElizaOS | `@elizaos/plugin-mcp` (v1.7.1) | stdio | v1 tested; updated for v2 (9 tools), not re-tested |
+The framework connects to the Telegraph MCP server as an **MCP client**. The MCP server signs every escrow payment itself: the framework and its model never see the key, which stays in `~/.telegraph/wallet.json`.

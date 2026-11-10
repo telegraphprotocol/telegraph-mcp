@@ -81,7 +81,7 @@ async function main() {
       const text = result.content?.map((c: any) => c.text || "").join("") || "";
       console.log(`✅ Ask: ${text.substring(0, 200)}...`);
     } catch (err: any) {
-      console.log(`⚠️  Ask (needs TELEGRAPH_PRIVATE_KEY): ${err.message?.substring(0, 100)}`);
+      console.log(`⚠️  Ask (needs the wallet from setup): ${err.message?.substring(0, 100)}`);
     }
 
     console.log("\n✅ All tests complete!");

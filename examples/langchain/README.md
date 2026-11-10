@@ -1,6 +1,6 @@
 # LangChain + Telegraph MCP Example
 
-Connects a LangChain agent to the **Telegraph MCP server** to access decentralized AI inference with automatic x402 micropayments.
+Connects a LangChain agent to the **Telegraph MCP server** to ask Telegraph's ranked miners, paid automatically from your escrow.
 
 Uses [`langchain-mcp-adapters`](https://github.com/langchain-ai/langchain-mcp-adapters) — the official LangChain library for MCP integration.
 
@@ -18,7 +18,7 @@ pip install -r requirements.txt
 
 # 3. Configure
 cp .env.example .env
-# Edit: set TELEGRAPH_PRIVATE_KEY (a wallet with USDC on the Telegraph network)
+# Paid asks use the wallet from `npx -y @telegraphprotocol/telegraph-protocol-mcp setup`; no key needed here
 
 # 4. Run the agent test
 python agent.py
@@ -28,7 +28,7 @@ python agent.py
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `TELEGRAPH_PRIVATE_KEY` | For paid asks | Wallet that pays (escrow first, then x402) |
+| `TELEGRAPH_PRIVATE_KEY` | Optional | Optional: a key instead of the wallet `setup` saved (paid from escrow) |
 | `OPENAI_API_KEY` | No | OpenAI key (optional, for agent LLM) |
 
 ## What the test script does
@@ -36,7 +36,7 @@ python agent.py
 1. Connects to Telegraph MCP server via stdio
 2. Lists all available Telegraph tools
 3. Tests free tools: `telegraph_find_intents`, `telegraph_ranking`, `telegraph_docs`
-4. Tests a paid ask: `telegraph_ask` (needs `TELEGRAPH_PRIVATE_KEY`)
+4. Tests a paid ask: `telegraph_ask` (needs the wallet from `setup`)
 
 ## Using with a LangChain Agent
 
@@ -47,11 +47,8 @@ from langchain.agents import create_agent
 client = MultiServerMCPClient({
     "telegraph": {
         "transport": "stdio",
-        "command": "node",
-        "args": ["/path/to/telegraph-mcp/dist/index.js"],
-        "env": {
-            "TELEGRAPH_PRIVATE_KEY": "0xyour_key",
-        },
+        "command": "npx",
+        "args": ["-y", "@telegraphprotocol/telegraph-protocol-mcp"],
     }
 })
 

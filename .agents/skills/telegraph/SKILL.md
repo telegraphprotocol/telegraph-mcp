@@ -1,6 +1,6 @@
 ---
 name: telegraph
-description: Use the Telegraph network through its MCP server. Activate when the user wants live facts (crypto or stock prices, FX rates, weather, gas prices, TVL), web, news or academic search, or a specialist answer (security or code review, vulnerability triage, sanctions or compliance checks, fact checks) from Telegraph's ranked miners; when they ask which Telegraph intents, miners or rankings exist; or when they ask about their Telegraph escrow balance or paying in USDC. Requires the Telegraph MCP server; paid asks need TELEGRAPH_PRIVATE_KEY.
+description: Use the Telegraph network through its MCP server. Activate when the user wants live facts (crypto or stock prices, FX rates, weather, gas prices, TVL), web, news or academic search, or a specialist answer (security or code review, vulnerability triage, sanctions or compliance checks, fact checks) from Telegraph's ranked miners; when they ask which Telegraph intents, miners or rankings exist; or when they ask about their Telegraph escrow balance or paying in USDC. Requires the Telegraph MCP server; paid asks need the wallet from its `setup` command.
 license: MIT
 homepage: https://github.com/telegraphprotocol/telegraph-mcp
 metadata:
@@ -11,7 +11,7 @@ metadata:
   openclaw:
     emoji: "📡"
     requires:
-      config: ["mcpServers.telegraph"]
+      config: ["mcp.servers.telegraph"]
 ---
 
 # Telegraph
@@ -29,7 +29,6 @@ Telegraph is a network of miners (APIs and models run by different people) that 
 | `telegraph_find_miners` | free | List an intent's miners with rank, score and price, or search miners by words |
 | `telegraph_ranking` | free | The latest ranking for an intent, or for all |
 | `telegraph_account` | free | Wallet USDC and ETH, and the escrow balance |
-| `telegraph_deposit` | gas | Move wallet USDC into escrow. Confirm the amount with the user first |
 | `telegraph_docs` | free | How payments, intents, ranking and errors work |
 
 ## How to use it
@@ -43,8 +42,8 @@ Telegraph is a network of miners (APIs and models run by different people) that 
 ## Payments
 
 - **Escrow first**: if the wallet has a Telegraph escrow balance, each ask is signed against it and deducted at the epoch close. A failed ask is never billed.
-- **x402 fallback**: otherwise the ask is paid from the wallet's USDC. If it then fails, the amount is credited to the user's escrow.
-- `telegraph_account` shows the balances. `telegraph_deposit` tops up escrow, but only after the user confirms the amount.
+- When escrow is low, the ask is refused with the balances; nothing is paid from the wallet. Tell the user to run `npx -y @telegraphprotocol/telegraph-protocol-mcp fund` in a terminal.
+- `telegraph_account` shows the balances, limits and how to top up. Never ask the user for a private key.
 - The private key stays in the MCP server's process. It never appears in tool inputs, outputs or model context.
 
 ## Errors
@@ -52,7 +51,7 @@ Telegraph is a network of miners (APIs and models run by different people) that 
 - **503 "could not route" or `no_compatible_miner`**: nothing was charged. Retry, or ask without the intent.
 - **400 `invalid_params`**: check the params with `telegraph_intent`.
 - **402**: escrow and wallet are both short. Check `telegraph_account`.
-- **"Paying needs a wallet"**: the server has no `TELEGRAPH_PRIVATE_KEY`. The free tools still work.
+- **"Paying needs a wallet"**: the user hasn't run `npx -y @telegraphprotocol/telegraph-protocol-mcp setup` yet. The free tools still work.
 
 ## Setup
 
@@ -61,8 +60,7 @@ Telegraph is a network of miners (APIs and models run by different people) that 
   "mcpServers": {
     "telegraph": {
       "command": "npx",
-      "args": ["-y", "@telegraphprotocol/telegraph-protocol-mcp"],
-      "env": { "TELEGRAPH_PRIVATE_KEY": "0xyour_burner_wallet_key" }
+      "args": ["-y", "@telegraphprotocol/telegraph-protocol-mcp"]
     }
   }
 }

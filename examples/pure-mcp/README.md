@@ -6,7 +6,7 @@ Validates the Telegraph MCP server using the raw Python MCP SDK — no framework
 
 ```bash
 pip install -r requirements.txt
-export TELEGRAPH_PRIVATE_KEY=0xyour_key_here   # optional: only paid asks need it
+# paid asks use the wallet from `npx -y @telegraphprotocol/telegraph-protocol-mcp setup`
 python test_mcp.py
 ```
 

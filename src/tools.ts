@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { fileURLToPath } from "node:url";
+import { sep } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Config } from "./config.js";
 import { Payer, type PaidResponse } from "./pay.js";
@@ -24,10 +26,20 @@ const guard =
     }
   };
 
+// How this copy is run: `npx` once published, this file's own node and path when
+// run from a clone. Used for the MCP entry `install` writes into an agent's
+// config, and for every command we tell the user to run, so a clone points at
+// itself and not at the published package.
+const ENTRY = fileURLToPath(new URL("index.js", import.meta.url));
+export const SERVER = ENTRY.includes(`${sep}node_modules${sep}`)
+  ? { command: "npx", args: ["-y", "@telegraphprotocol/telegraph-protocol-mcp"] }
+  : { command: process.execPath, args: [ENTRY] };
+export const RUN = `${SERVER.command} ${SERVER.args.join(" ")}`;
+
 const NO_KEY =
-  "Paying needs a wallet: set TELEGRAPH_PRIVATE_KEY (the 0x private key of a wallet holding USDC on the " +
-  "Telegraph network) in this MCP server's settings and restart it. The free tools (find intents, miners, " +
-  "ranking, docs) work without one.";
+  `Paying needs a Telegraph wallet, and this server has none yet. Ask the user to run \`${RUN} setup\` in a ` +
+  "terminal (it creates or imports a wallet and funds it, with their approval at each step), then restart this " +
+  "MCP server. The free tools (find intents, miners, ranking, docs) work without one.";
 
 const trim = (s: unknown, n: number) => {
   const t = String(s ?? "").replace(/\s+/g, " ").trim();
@@ -73,8 +85,8 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
       description:
         "Ask the Telegraph network a question: live prices, FX, weather, web and academic search, security, code " +
         "review, compliance and 100+ other intents. The node routes it to the best-ranked live miner and returns " +
-        "its answer in the intent's fields. Costs about $0.01, paid from the Telegraph escrow balance (a failed ask " +
-        "is never billed) or by x402 from the wallet's USDC.",
+        "its answer in the intent's fields. Costs about $0.01, paid automatically from the Telegraph escrow balance " +
+        "(a failed ask is never billed; repeating the same ask within a minute is not paid twice).",
       inputSchema: askShape,
       annotations: paid,
     },
@@ -258,8 +270,9 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
     {
       title: "Account",
       description:
-        "This server's wallet (or any address): wallet USDC and ETH, and the Telegraph escrow balance that pays for " +
-        "asks (spendable, deposited, debt, pending withdrawal). Free.",
+        "This server's wallet (or any address): its address and network, wallet USDC and ETH, the Telegraph escrow " +
+        "balance that pays for asks (spendable, deposited, debt, pending withdrawal), the spending limits, and how " +
+        "to top up. Free.",
       inputSchema: { address: z.string().optional().describe("Address to look up. Default: this server's wallet.") },
       annotations: free,
     },
@@ -267,24 +280,25 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
       const who = address || payer?.account.address;
       if (!who) return fail(NO_KEY);
       if (!/^0x[0-9a-fA-F]{40}$/.test(who)) return fail(`Not an address: ${who}`);
+      const acct = await chain.account(who as `0x${string}`);
+      if (who !== payer?.account.address) return ok(acct);
       return ok({
-        ...(await chain.account(who as `0x${string}`)),
-        payment_mode: who === payer?.account.address ? cfg.payment : undefined,
-        note:
-          "Asks are paid from escrow first (a failed ask is never billed), else by x402 from the wallet's USDC. " +
-          "telegraph_deposit moves wallet USDC into escrow.",
+        ...acct,
+        payment_mode: cfg.payment,
+        limits: { max_per_ask_usd: cfg.maxAskUsd, daily_usd: cfg.dailyLimitUsd, spent_today_usd: payer.spent.today() },
+        top_up: `Asks are paid from escrow automatically. To add more, the user runs \`${RUN} fund\` in a terminal and confirms the amount.`,
       });
     }),
   );
 
-  server.registerTool(
+  if (cfg.agentDeposit) server.registerTool(
     "telegraph_deposit",
     {
       title: "Deposit to escrow",
       description:
         "Move USDC from this server's wallet into its Telegraph escrow balance (approve, then depositUSDC on chain; " +
-        "needs a little ETH for gas). Escrow then pays for asks. Confirm the amount with the user first. Withdrawing " +
-        "is explained in telegraph_docs topic payments.",
+        "needs a little ETH for gas). Escrow then pays for asks. Only offered when TELEGRAPH_ALLOW_AGENT_DEPOSIT is " +
+        "set; confirm the amount with the user first. Withdrawing is explained in telegraph_docs topic payments.",
       inputSchema: { amount_usd: z.number().positive().max(10_000).describe("USDC to deposit, e.g. 1 or 5.") },
       annotations: paid,
     },
@@ -336,7 +350,13 @@ function rankingRows(board: any, intent: string) {
 function answer(r: PaidResponse, oneMiner = false): Text {
   const b = r.body && typeof r.body === "object" ? r.body : { error: r.body };
   const payment = r.rail
-    ? { rail: r.rail, receipt: r.receipt, ...(r.escrowRefused ? { escrow_skipped: r.escrowRefused } : {}) }
+    ? {
+        rail: r.rail,
+        price_usd: r.priceUsd,
+        receipt: r.receipt,
+        ...(r.escrowRefused ? { escrow: r.escrowRefused } : {}),
+        ...(r.repeated ? { repeated: "Same ask as a moment ago: this is that answer, not paid again." } : {}),
+      }
     : undefined;
   if (r.status >= 200 && r.status < 300) {
     return ok({
@@ -366,7 +386,16 @@ function hintFor(status: number, b: any, oneMiner: boolean): string | undefined 
   if (err === "invalid_params") return "The params don't fit the intent. telegraph_intent lists the params it takes.";
   if (err === "no_input_schema") return "This intent takes no params. Send only a question.";
   if (status === 429) return "Too many new questions this minute. Wait a minute, then retry.";
-  if (status === 402) return "Payment refused. telegraph_account shows the balances; telegraph_deposit tops up escrow.";
+  if (status === 402) {
+    // The node refuses for more than a short balance: an agent over its charge
+    // limit, or one whose deliveries are suspended until its debt is repaid.
+    // Pass its own words through instead of guessing which it was.
+    const why = String(b?.reason || b?.error || "").trim();
+    return (
+      `Payment from escrow refused${why ? ` (the node says: ${why})` : ""}, and nothing was charged. telegraph_account ` +
+      `shows the balance and anything owed; the user fixes it by running \`${RUN} fund\` in a terminal and confirming the amount.`
+    );
+  }
   if (status === 503) return "The node could not route this now. Nothing was charged; try again shortly.";
   if (status >= 500) return "The miner or node failed. Escrow never bills a failed ask; an x402 payment is credited to escrow.";
   return undefined;
