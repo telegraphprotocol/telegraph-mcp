@@ -23,13 +23,6 @@ Take USDC back out with `... withdraw`: it requests the amount, and you run it a
 
 Back up `~/.telegraph/wallet.json`. It is the only copy of the key, and the escrow balance goes with it.
 
-## Claude, ChatGPT and Grok (hosted connector)
-
-Those apps take a URL, not a command, so they need the same server run as a web service:
-`serve --http` serves MCP over Streamable HTTP, each person signs in with their Anjoman
-account, and their asks are paid from their own escrow. Nothing on their machine, and no key
-on the server. Running and hosting it: [docs/hosting.md](docs/hosting.md).
-
 ## Adding it to an app by hand
 
 No setting or key is needed: the server uses the wallet from setup. `setup` and `install <app>` write these for you where they can.

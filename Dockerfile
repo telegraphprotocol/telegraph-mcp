@@ -11,12 +11,10 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
-COPY guides/ ./guides/
 USER node
-ENV NODE_ENV=production PORT=8787
+EXPOSE 3000
 
-# Hosted connector server: docker run -p 8787:8787 -e TELEGRAPH_MCP_PUBLIC_URL=... -e TELEGRAPH_BACKEND_URL=... <image>
-# Local stdio server instead: docker run -i <image> --stdio
-EXPOSE 8787
+ENV TELEGRAPH_MCP_TRANSPORT=stdio
+ENV NODE_ENV=production
+
 ENTRYPOINT ["node", "dist/index.js"]
-CMD ["serve", "--http"]
