@@ -29,8 +29,7 @@ RULES FOR USING TELEGRAPH TOOLS:
 2. DISCOVERY: telegraph_find_intents shows what can be asked, telegraph_intent an
    intent's params, telegraph_find_miners and telegraph_ranking who answers.
 3. ONE MINER: telegraph_ask_miner asks a miner the user names.
-4. MONEY: An ask costs about $0.01. telegraph_account shows balances;
-   telegraph_deposit tops up escrow, only after the user confirms the amount.
+4. MONEY: An ask costs about $0.01. telegraph_account shows balances and how to top up.
 
 Always say which miner answered.
 """
@@ -95,7 +94,7 @@ async def main():
         except Exception as e:
             print(f"   ❌ Error: {e}")
 
-    # Test 2: a paid ask (needs TELEGRAPH_PRIVATE_KEY)
+    # Test 2: a paid ask (needs the wallet from setup)
     print("\n🔍 Routed ask (telegraph_ask)...")
     tool = next((t for t in tools if t.name == "telegraph_ask"), None)
     if tool:
@@ -105,7 +104,7 @@ async def main():
             text = str(result)
             print(f"   ✅ Result: {text[:400]}...")
         except Exception as e:
-            print(f"   ❌ Error (needs TELEGRAPH_PRIVATE_KEY): {e}")
+            print(f"   ❌ Error (needs the wallet from setup): {e}")
 
     print("\n" + "=" * 60)
     print("All tests complete!")

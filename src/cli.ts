@@ -15,6 +15,7 @@ import { RUN, SERVER } from "./tools.js";
 // never handles setup.
 
 const FAUCET = "https://anjoman.ai/dashboard/faucet"; // where beta 2's test USDC comes from
+const GUIDE = "https://anjoman.ai/docs/using/mcp-server"; // setup for every other app
 
 const HELP = `Telegraph MCP server
 
@@ -22,7 +23,7 @@ const HELP = `Telegraph MCP server
   ${RUN} fund [usd]     move USDC into escrow (you confirm first)
   ${RUN} withdraw [usd] take USDC back out: request it, then run it again to collect
   ${RUN} status         balances, limits and what today's asks have cost
-  ${RUN} install [app]  add Telegraph to claude-desktop, cursor, codex or claude-code (any other app: it prints the entry)
+  ${RUN} install [app]  add Telegraph to claude-desktop, cursor or claude-code (any other app: it links the setup guide)
 
 With no command, an MCP client starts this as a server over stdio.`;
 
@@ -186,49 +187,36 @@ async function status(io: Io, cfg: Config): Promise<number> {
   return 0;
 }
 
-// Where each app keeps its MCP servers. Only formats known for certain are
-// written; any other app gets the entry printed to paste in.
-function configFile(app: string): { file: string; toml?: boolean } | undefined {
+// Where the apps with a plain mcpServers JSON file keep it. Any other app has
+// its own format, which its section of the setup guide shows.
+function configFile(app: string): string | undefined {
   const h = homedir();
-  if (app === "cursor") return { file: join(h, ".cursor/mcp.json") };
-  if (app === "codex") return { file: join(h, ".codex/config.toml"), toml: true };
+  if (app === "cursor") return join(h, ".cursor/mcp.json");
   if (app !== "claude-desktop") return undefined;
-  if (platform() === "darwin") return { file: join(h, "Library/Application Support/Claude/claude_desktop_config.json") };
-  if (platform() === "win32") return { file: join(process.env.APPDATA || join(h, "AppData/Roaming"), "Claude/claude_desktop_config.json") };
-  return { file: join(h, ".config/Claude/claude_desktop_config.json") };
+  if (platform() === "darwin") return join(h, "Library/Application Support/Claude/claude_desktop_config.json");
+  if (platform() === "win32") return join(process.env.APPDATA || join(h, "AppData/Roaming"), "Claude/claude_desktop_config.json");
+  return join(h, ".config/Claude/claude_desktop_config.json");
 }
 
 async function install(io: Io, which?: string): Promise<number> {
-  const app = (which || (await io.ask("\nAdd Telegraph to which app (claude-desktop, cursor, codex, claude-code; empty to skip)? "))).toLowerCase();
+  const app = (which || (await io.ask("\nAdd Telegraph to which app (claude-desktop, cursor, claude-code; empty to skip)? "))).toLowerCase();
   if (!app || app === "none" || app === "skip") return 0;
   if (app === "claude-code") {
     io.say(`\nRun this once: claude mcp add --scope user telegraph -- ${RUN}`);
     return 0;
   }
-  const target = configFile(app);
-  if (!target) {
-    io.say(
-      `\nAdd this MCP server in ${app}'s own settings (examples/ in the repo has ready files for Hermes, OpenClaw, Goose, Continue and ElizaOS):\n` +
-        `  ${JSON.stringify({ mcpServers: { telegraph: SERVER } })}\nNo key or setting is needed: the wallet from setup is used.`,
-    );
+  const file = configFile(app);
+  if (!file) {
+    io.say(`\nFor ${app}, follow its section of the setup guide: ${GUIDE}\nNo key or setting is needed: the wallet from setup is used.`);
     return 0;
   }
-  if (!(await io.confirm(`Add Telegraph to ${target.file}? (the old file is kept as .bak)`, true))) return 1;
-  mkdirSync(dirname(target.file), { recursive: true });
-  const text = existsSync(target.file) ? readFileSync(target.file, "utf8") : "";
-  if (text) copyFileSync(target.file, `${target.file}.bak`);
-  if (target.toml) {
-    if (/^\[mcp_servers\.telegraph\]/m.test(text)) {
-      io.say(`${target.file} already has [mcp_servers.telegraph]; left as it is.`);
-      return 0;
-    }
-    const entry = `[mcp_servers.telegraph]\ncommand = ${JSON.stringify(SERVER.command)}\nargs = ${JSON.stringify(SERVER.args)}\n`;
-    writeFileSync(target.file, `${text}${!text || text.endsWith("\n") ? "" : "\n"}\n${entry}`);
-  } else {
-    const doc = text ? JSON.parse(text) : {};
-    doc.mcpServers = { ...doc.mcpServers, telegraph: SERVER };
-    writeFileSync(target.file, JSON.stringify(doc, null, 2) + "\n");
-  }
+  if (!(await io.confirm(`Add Telegraph to ${file}? (the old file is kept as .bak)`, true))) return 1;
+  mkdirSync(dirname(file), { recursive: true });
+  const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+  if (text) copyFileSync(file, `${file}.bak`);
+  const doc = text ? JSON.parse(text) : {};
+  doc.mcpServers = { ...doc.mcpServers, telegraph: SERVER };
+  writeFileSync(file, JSON.stringify(doc, null, 2) + "\n");
   io.say(`Added. Restart ${app} to load it.`);
   return 0;
 }

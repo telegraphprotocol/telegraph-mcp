@@ -1,12 +1,13 @@
 {
-  "mcpServers": {
-    "telegraph": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@telegraphprotocol/telegraph-protocol-mcp"
-      ]
+  "mcp": {
+    "servers": {
+      "telegraph": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@telegraphprotocol/telegraph-protocol-mcp"
+        ]
+      }
     }
   }
 }

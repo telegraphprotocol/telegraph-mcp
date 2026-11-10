@@ -1,10 +1,10 @@
 # Telegraph MCP server
 
-Gives any MCP agent (Claude Desktop, Claude Code, Cursor, Codex, OpenClaw, Hermes, Goose, Continue, ElizaOS, LangChain, ...) the Telegraph network. Ask a question and the best-ranked miner answers. Payment comes from your Telegraph escrow automatically: no keys, signatures or blockchain steps for you or your agent.
+Gives any MCP agent (Claude Desktop, Claude Code, Cursor, Continue, Goose, OpenClaw, LangChain, ElizaOS, ...) the Telegraph network, on your own computer. Ask a question and the best-ranked miner answers. Payment comes from your Telegraph escrow automatically: no keys, signatures or blockchain steps for you or your agent.
 
 ## Start in three steps
 
-You need Node 18 or later.
+You need Node 20 or later.
 
 **1. Set up once.** In a terminal:
 
@@ -30,9 +30,9 @@ No setting or key is needed: the server uses the wallet from setup. `setup` and 
 | App | How |
 |---|---|
 | Claude Code | `claude mcp add --scope user telegraph -- npx -y @telegraphprotocol/telegraph-protocol-mcp` |
-| Claude Desktop, Cursor, OpenClaw, most others | Add to `mcpServers`: `{"telegraph": {"command": "npx", "args": ["-y", "@telegraphprotocol/telegraph-protocol-mcp"]}}` |
-| Codex | In `~/.codex/config.toml`: `[mcp_servers.telegraph]`, then `command = "npx"` and `args = ["-y", "@telegraphprotocol/telegraph-protocol-mcp"]` |
-| Goose, Continue, Hermes, ElizaOS, LangChain | Ready files in [examples/](examples/) |
+| Claude Desktop, Cursor, any other MCP client | Add to `mcpServers`: `{"telegraph": {"command": "npx", "args": ["-y", "@telegraphprotocol/telegraph-protocol-mcp"]}}` |
+| OpenClaw | `openclaw mcp add telegraph --command npx --arg=-y --arg @telegraphprotocol/telegraph-protocol-mcp` |
+| Continue, Goose, LangChain, ElizaOS | Ready files in [examples/](examples/) |
 
 ## How paying works
 
@@ -83,7 +83,7 @@ Beta 2 runs on Ethereum Sepolia, so there's no real money. Its USDC (`0xcc194e1a
 - The key lives in `~/.telegraph/wallet.json` (mode 0600), or in `TELEGRAPH_PRIVATE_KEY` if you set one. It's never in an agent's config, a tool result or a log, so the agent and its model never see it through MCP.
 - Use a wallet made for this, holding only what you plan to spend. The limits cap what the agent can spend.
 - By default the agent gets no tool that moves funds: deposits and withdrawals happen in your terminal, after you confirm.
-- That holds for the tools. An agent that can also run shell commands (Claude Code, Codex, Cursor) can read the wallet file or run `fund` itself, so the real protection is the dedicated wallet and the limits, not the tool list.
+- That holds for the tools. An agent that can also run shell commands (Claude Code, Cursor, Goose) can read the wallet file or run `fund` itself, so the real protection is the dedicated wallet and the limits, not the tool list.
 - The server runs locally over stdio and opens no port.
 
 ## Development

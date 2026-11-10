@@ -1,4 +1,0 @@
-# Append to ~/.codex/config.toml (or run: npx -y @telegraphprotocol/telegraph-protocol-mcp install codex)
-[mcp_servers.telegraph]
-command = "npx"
-args = ["-y", "@telegraphprotocol/telegraph-protocol-mcp"]

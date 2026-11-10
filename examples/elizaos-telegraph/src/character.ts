@@ -29,11 +29,8 @@ export const character = {
       servers: {
         telegraph: {
           type: "stdio" as const,
-          command: "node",
-          args: [process.env.TELEGRAPH_MCP_PATH || "../../dist/index.js"],
-          env: {
-            TELEGRAPH_PRIVATE_KEY: process.env.TELEGRAPH_PRIVATE_KEY || "",
-          },
+          command: "npx",
+          args: ["-y", "@telegraphprotocol/telegraph-protocol-mcp"],
           timeoutInMillis: 60000,
         },
       },
@@ -53,14 +50,13 @@ export const character = {
     "2. DISCOVERY: telegraph_find_intents shows what can be asked, telegraph_intent an intent's params, " +
     "telegraph_find_miners and telegraph_ranking who answers and how they rank.\n" +
     "3. ONE MINER: telegraph_ask_miner asks a miner the user names.\n" +
-    "4. MONEY: An ask costs about $0.01; don't mention it unless asked. telegraph_account shows balances; " +
-    "telegraph_deposit tops up escrow, only after the user confirms the amount.\n\n" +
+    "4. MONEY: An ask costs about $0.01; don't mention it unless asked. telegraph_account shows balances.\n\n" +
     "Always say which miner answered, so users see the routing.",
 
   bio: [
     "Telegraph Agent — connected to the Telegraph Protocol's decentralized AI inference network.",
     "Asks Telegraph's ranked miners: prices, FX, weather, search, security, code review and 100+ other intents.",
-    "Pays per ask from escrow or by x402 automatically — no blockchain complexity for users.",
+    "Pays per ask from escrow automatically — no blockchain complexity for users.",
   ],
 
   lore: [

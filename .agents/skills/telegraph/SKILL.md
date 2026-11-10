@@ -1,6 +1,6 @@
 ---
 name: telegraph
-description: Use the Telegraph network through its MCP server. Activate when the user wants live facts (crypto or stock prices, FX rates, weather, gas prices, TVL), web, news or academic search, or a specialist answer (security or code review, vulnerability triage, sanctions or compliance checks, fact checks) from Telegraph's ranked miners; when they ask which Telegraph intents, miners or rankings exist; or when they ask about their Telegraph escrow balance or paying in USDC. Requires the Telegraph MCP server; paid asks need TELEGRAPH_PRIVATE_KEY.
+description: Use the Telegraph network through its MCP server. Activate when the user wants live facts (crypto or stock prices, FX rates, weather, gas prices, TVL), web, news or academic search, or a specialist answer (security or code review, vulnerability triage, sanctions or compliance checks, fact checks) from Telegraph's ranked miners; when they ask which Telegraph intents, miners or rankings exist; or when they ask about their Telegraph escrow balance or paying in USDC. Requires the Telegraph MCP server; paid asks need the wallet from its `setup` command.
 license: MIT
 homepage: https://github.com/telegraphprotocol/telegraph-mcp
 metadata:
@@ -11,7 +11,7 @@ metadata:
   openclaw:
     emoji: "📡"
     requires:
-      config: ["mcpServers.telegraph"]
+      config: ["mcp.servers.telegraph"]
 ---
 
 # Telegraph

@@ -1,6 +1,6 @@
 # LangChain + Telegraph MCP Example
 
-Connects a LangChain agent to the **Telegraph MCP server** to access decentralized AI inference with automatic x402 micropayments.
+Connects a LangChain agent to the **Telegraph MCP server** to ask Telegraph's ranked miners, paid automatically from your escrow.
 
 Uses [`langchain-mcp-adapters`](https://github.com/langchain-ai/langchain-mcp-adapters) — the official LangChain library for MCP integration.
 
@@ -47,10 +47,8 @@ from langchain.agents import create_agent
 client = MultiServerMCPClient({
     "telegraph": {
         "transport": "stdio",
-        "command": "node",
-        "args": ["/path/to/telegraph-mcp/dist/index.js"],
-        "env": {
-        },
+        "command": "npx",
+        "args": ["-y", "@telegraphprotocol/telegraph-protocol-mcp"],
     }
 })
 

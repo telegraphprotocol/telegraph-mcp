@@ -27,13 +27,13 @@ After publish, verify:
 clawhub install telegraph   # in a scratch workspace
 ```
 
-and confirm the skill only activates when `mcpServers.telegraph` exists in `~/.openclaw/openclaw.json` (see `examples/openclaw/`).
+and confirm the skill only activates when `mcp.servers.telegraph` exists in `~/.openclaw/openclaw.json` (see `examples/openclaw/`).
 
 **Version bumps**: bump `metadata.version` in `skills/telegraph/SKILL.md`, re-run `clawhub publish` with the new `--version` and a `--changelog`.
 
 ## Track 2 — Bundled-skill PR to openclaw/openclaw (when we have traction)
 
-OpenClaw ships bundled skills with the install and filters them at load time via the `metadata.openclaw` gating block. Our skill gates on the `mcpServers.telegraph` config path, so bundling it adds **zero prompt overhead and zero attack surface** for users who haven't configured Telegraph — this is the core argument of the PR.
+OpenClaw ships bundled skills with the install and filters them at load time via the `metadata.openclaw` gating block. Our skill gates on the `mcp.servers.telegraph` config path, so bundling it adds **zero prompt overhead and zero attack surface** for users who haven't configured Telegraph — this is the core argument of the PR.
 
 Steps:
 
@@ -55,7 +55,7 @@ security, code review and 100+ others), paid per ask in USDC from a Telegraph es
 ## Why it is safe to bundle
 
 - **Dormant by default.** The skill gates on `requires.config:
-  ["mcpServers.telegraph"]` — it loads only for users who have explicitly
+  ["mcp.servers.telegraph"]` — it loads only for users who have explicitly
   added the Telegraph MCP server to `openclaw.json`. Everyone else pays zero
   prompt/token overhead and the skill is invisible to the agent.
 - **No new binaries or dependencies.** The MCP server runs via
@@ -78,7 +78,7 @@ security, code review and 100+ others), paid per ask in USDC from a Telegraph es
 
 ## Testing
 
-Configured `mcpServers.telegraph` in `openclaw.json`, started a new session,
+Configured `mcp.servers.telegraph` in `openclaw.json`, started a new session,
 confirmed the skill loads and the agent calls `telegraph_find_miners` (free)
 and `telegraph_ask` (paid). Removed the config entry, confirmed the skill no
 longer loads. (Done with v1's tool names; repeat with v2 before submitting.)

@@ -1,7 +1,7 @@
 # VS Code Continue + Telegraph MCP
 
-## Setup
+1. Set up once: `npx -y @telegraphprotocol/telegraph-protocol-mcp setup`.
+2. Copy [`telegraph.yaml`](./telegraph.yaml) to `.continue/mcpServers/telegraph.yaml` at the top of your workspace.
+3. Switch Continue to **Agent** mode (MCP tools only work there) and ask: "What is the BTC price? Use Telegraph."
 
-1. Open Continue's `config.json`.
-2. Merge the [`config.json`](./config.json) block into your settings.
-3. Replace `0xyour_key_here` with your EVM private key.
+No key goes in the config: the server uses the wallet from step 1.

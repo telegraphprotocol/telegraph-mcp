@@ -6,21 +6,12 @@ OpenClaw has native MCP support. First set up once in a terminal: `npx -y @teleg
 
 ## 1. Add the MCP server
 
-Merge [`openclaw.config.json`](./openclaw.config.json) into `~/.openclaw/openclaw.json`:
-
-```json
-{
-  "mcpServers": {
-    "telegraph": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@telegraphprotocol/telegraph-protocol-mcp"]
-    }
-  }
-}
+```bash
+openclaw mcp add telegraph --command npx --arg=-y --arg @telegraphprotocol/telegraph-protocol-mcp
+openclaw mcp doctor telegraph --probe
 ```
 
-No key goes here: the server uses the wallet `setup` saved.
+Or merge [`openclaw.config.json`](./openclaw.config.json) into `~/.openclaw/openclaw.json`. No key goes here: the server uses the wallet `setup` saved.
 
 ## 2. Install the skill
 
@@ -36,7 +27,7 @@ Or copy it from this repo into your personal skills directory:
 cp -r skills/telegraph ~/.openclaw/skills/telegraph
 ```
 
-The skill is **gated on the `mcpServers.telegraph` config entry** — it stays dormant (zero prompt overhead, invisible to the agent) until step 1 is done. New sessions pick it up automatically.
+The skill is **gated on the `mcp.servers.telegraph` config entry** — it stays dormant (zero prompt overhead, invisible to the agent) until step 1 is done. New sessions pick it up automatically.
 
 ## 3. Verify
 

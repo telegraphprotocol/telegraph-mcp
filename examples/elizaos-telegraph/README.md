@@ -1,6 +1,6 @@
 # ElizaOS + Telegraph MCP Example
 
-ElizaOS agent that connects to the **Telegraph MCP server** to access decentralized AI inference (weather forecasting, deepfake detection, LLMs, signal monitoring) with automatic x402 micropayments.
+ElizaOS agent that connects to the **Telegraph MCP server** to access decentralized AI inference (prices, weather, search, specialist answers), paid automatically from your escrow.
 
 ## Architecture
 
@@ -12,7 +12,7 @@ ElizaOS Agent
   ▼
 Telegraph MCP Server (stdio transport)
   │
-  │ HTTP + x402 payment
+  │ HTTP, paid from escrow
   │
   ▼
 Telegraph Node / Engine / Daemon (devnode.telegraphprotocol.com)
@@ -50,7 +50,7 @@ npm start
 1. ElizaOS loads the `@elizaos/plugin-mcp` plugin
 2. The plugin connects to the Telegraph MCP server via stdio
 3. Telegraph MCP tools appear as actions the agent can use
-4. When the agent calls a Telegraph tool, x402 payment is handled automatically
+4. When the agent calls a paid Telegraph tool, the server pays from your escrow
 5. The private key stays in the MCP server — never exposed to Eliza
 
 ## Character System Prompt
