@@ -62,10 +62,26 @@ npx skills add telegraphprotocol/telegraph-mcp/telegraph
 
 ---
 
+## 4. Claude Desktop file
+
+The Integrations page's "Add to Claude Desktop" button downloads `telegraph.mcpb` from the latest GitHub release. `manifest.json` describes it; build it from a clean checkout so only runtime packages go in:
+
+```bash
+npm ci && npm run build
+npm prune --omit=dev
+npx @anthropic-ai/mcpb pack . telegraph.mcpb
+gh release upload v<version> telegraph.mcpb --clobber
+```
+
+Keep `version` in `manifest.json` the same as in `package.json`.
+
+---
+
 ## Release checklist
 
 1. Bump `version` in **both** `package.json` and `server.json`.
 2. `npm run build` and smoke-test (`npm run inspect`).
 3. `npm publish --access public`.
 4. `mcp-publisher publish`.
-5. Tag the release: `git tag v<version> && git push --tags`.
+5. Tag the release: `git tag v<version> && git push --tags`, and create the GitHub release `v<version>`.
+6. Build `telegraph.mcpb` and attach it to that release (section 4).

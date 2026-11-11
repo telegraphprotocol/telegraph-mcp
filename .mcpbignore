@@ -1,0 +1,15 @@
+/src/
+/test/
+/examples/
+/docs/
+/scripts/
+/skills/
+/submissions/
+/.agents/
+/Dockerfile
+/PUBLISHING.md
+/server.json
+/skills.sh.json
+/start-mcp.sh
+/tsconfig.json
+*.mcpb
