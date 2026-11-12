@@ -64,7 +64,7 @@ npx skills add telegraphprotocol/telegraph-mcp/telegraph
 
 ## 4. Claude Desktop file
 
-The Integrations page's "Add to Claude Desktop" button downloads `telegraph.mcpb` from the latest GitHub release. `manifest.json` describes it; build it from a clean checkout so only runtime packages go in:
+The Claude Desktop card on the Integrations page downloads `telegraph.mcpb` from the latest GitHub release. `manifest.json` describes it; build it from a clean checkout so only runtime packages go in:
 
 ```bash
 npm ci && npm run build
