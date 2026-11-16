@@ -1,10 +1,10 @@
 # Publishing & Registration
 
-How to publish `telegraph-protocol-mcp` to npm and register it on the public **MCP Registry** and **skills.sh** directories.
+How to publish `@telegraphprotocol/telegraph-protocol-mcp` to npm and register it on the public **MCP Registry** and **skills.sh** directories.
 
 The repo already ships the required manifests:
 
-- [`package.json`](./package.json) — `name: telegraph-protocol-mcp`, `mcpName: io.github.telegraphprotocol/telegraph`
+- [`package.json`](./package.json) — `name: @telegraphprotocol/telegraph-protocol-mcp`, `mcpName: io.github.telegraphprotocol/telegraph`
 - [`server.json`](./server.json) — MCP Registry server manifest
 - [`skills.sh.json`](./skills.sh.json) — skills.sh repo-page grouping
 - [`.agents/skills/telegraph/SKILL.md`](./.agents/skills/telegraph/SKILL.md) — the skill descriptor
@@ -22,7 +22,7 @@ npm login              # authenticate (npm whoami to confirm)
 npm publish --access public
 ```
 
-Verify: https://www.npmjs.com/package/telegraph-protocol-mcp
+Verify: https://www.npmjs.com/package/@telegraphprotocol/telegraph-protocol-mcp
 
 > `package.json` contains `"mcpName": "io.github.telegraphprotocol/telegraph"`. The MCP Registry reads this field from the published package to verify ownership, so it **must** be present in what you publish (it is committed here). Keep `version` in `package.json` and `server.json` in sync on every release.
 
