@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { loadConfig } from "../dist/config.js";
 import { saveWallet, readWalletKey, newKey, walletPath, walletUnreadable } from "../dist/wallet.js";
 import { Dedupe, SpendLog, requestKey } from "../dist/limits.js";
+import { AnjomanApi } from "../dist/api.js";
+import { keyAnswer } from "../dist/tools.js";
 
 const home = () => mkdtempSync(join(tmpdir(), "tg-mcp-"));
 
@@ -115,4 +117,87 @@ test("answers past the dedupe window are dropped, not kept for ever", async () =
   await new Promise((r) => setTimeout(r, 40));
   await d.run("b", ok, async () => 2);
   assert.equal(d.size, 1, "only the live answer is held");
+});
+
+const KEY = "tgk_" + "a".repeat(43);
+
+test("an API key switches to key mode, is checked, and points at the Anjoman API by default", () => {
+  const c = loadConfig({ TELEGRAPH_HOME: home(), TELEGRAPH_API_KEY: ` ${KEY} ` });
+  assert.equal(c.apiKey, KEY);
+  assert.equal(c.apiUrl, "https://backend.telegraphprotocol.com");
+  assert.equal(loadConfig({ TELEGRAPH_HOME: home(), TELEGRAPH_API_KEY: KEY, TELEGRAPH_API_URL: "http://localhost:4100/" }).apiUrl, "http://localhost:4100");
+  assert.equal(loadConfig({ TELEGRAPH_HOME: home() }).apiKey, undefined, "wallet mode without one");
+  assert.throws(() => loadConfig({ TELEGRAPH_HOME: home(), TELEGRAPH_API_KEY: "0x" + "1".repeat(64) }), /starts with tgk_/);
+});
+
+// A stand-in for the Anjoman API: replies in order, and records what it was asked.
+function fakeApi(replies) {
+  const calls = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), method: init.method, auth: init.headers.Authorization, body: init.body && JSON.parse(init.body) });
+    const [status, body] = replies.shift();
+    return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  };
+  return { calls, restore: () => (globalThis.fetch = original) };
+}
+
+test("key mode asks the account for one JSON reply, sending the key and nothing else", async () => {
+  const api = fakeApi([[200, { conversationId: "c1", jobId: "j1", messageId: "m1", answer: "42", status: "complete", sources: [], costUsd: 0.01 }]]);
+  try {
+    const r = await new AnjomanApi("http://api.test", KEY).ask({ message: "what is 6x7?" });
+    assert.deepEqual(api.calls[0], { url: "http://api.test/agent/chat", method: "POST", auth: `Bearer ${KEY}`, body: { message: "what is 6x7?", stream: false } });
+    assert.equal(r.answer, "42");
+    assert.equal(r.costUsd, 0.01);
+    assert.equal(keyAnswer(r).isError, undefined);
+  } finally {
+    api.restore();
+  }
+});
+
+test("key mode follows a job handed back (202) until it ends", { timeout: 20_000 }, async () => {
+  const api = fakeApi([
+    [202, { status: "running", jobId: "j1", conversationId: "c1" }],
+    [200, { id: "j1", status: "running" }],
+    [200, { id: "j1", status: "completed", answer: "late answer", costUsd: 0.02 }],
+  ]);
+  try {
+    const r = await new AnjomanApi("http://api.test", KEY).ask({ message: "slow one" });
+    assert.deepEqual(api.calls.map((c) => c.method + " " + c.url.replace("http://api.test", "")), ["POST /agent/chat", "GET /agent/jobs/j1", "GET /agent/jobs/j1"]);
+    assert.equal(r.answer, "late answer");
+    assert.equal(r.jobId, "j1");
+    assert.equal(r.conversationId, "c1");
+  } finally {
+    api.restore();
+  }
+});
+
+test("key mode passes the API's own reason on when it refuses", async () => {
+  const api = fakeApi([[401, { message: "This API key has been revoked. Create a new one in Anjoman.", statusCode: 401 }]]);
+  try {
+    await assert.rejects(new AnjomanApi("http://api.test", KEY).ask({ message: "hi" }), /401 from \/agent\/chat: This API key has been revoked/);
+  } finally {
+    api.restore();
+  }
+});
+
+test("key mode shows the balance and recent spend, and says how to top up", async () => {
+  const api = fakeApi([
+    [200, { effectiveBalance: "1.5", escrowBalance: "2", agentDebt: "0" }],
+    [200, { totals: [{ usageKind: "paid", jobs: 1, costUsd: 0.01 }], jobs: [{ status: "completed", costUsd: 0.01, startedAt: "2026-11-16T00:00:00Z", question: "private" }] }],
+  ]);
+  try {
+    const a = await new AnjomanApi("http://api.test", KEY).account();
+    assert.deepEqual(a.escrow, { spendable_usd: "1.5", deposited_usd: "2", debt_usd: "0" });
+    assert.deepEqual(a.recent_jobs, [{ status: "completed", cost_usd: 0.01, at: "2026-11-16T00:00:00Z" }]);
+    assert.match(a.top_up, /Deposit/);
+  } finally {
+    api.restore();
+  }
+});
+
+test("a turn that ended without an answer is an error for the agent, and one that answered is not", () => {
+  assert.equal(keyAnswer({ status: "cancelled" }).isError, true);
+  assert.equal(keyAnswer({ status: "running", jobId: "j1", note: "still going" }).isError, true);
+  assert.equal(keyAnswer({ status: "failed", answer: "I couldn't get that: the account has no balance." }).isError, undefined);
 });

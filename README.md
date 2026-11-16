@@ -56,9 +56,29 @@ All optional.
 | `TELEGRAPH_DAILY_LIMIT_USD` | `5` | The most all asks may cost in a UTC day. `0` means no limit |
 | `TELEGRAPH_HOME` | `~/.telegraph` | Where the wallet and the day's spending are kept |
 | `TELEGRAPH_PRIVATE_KEY` | none | Use this key instead of the wallet file. For servers and CI. (`TELEGRAPH_EVM_PRIVATE_KEY`, the v1 name, also works.) |
+| `TELEGRAPH_API_KEY` | none | An Anjoman API key (`tgk_…`). Switches to [key mode](#using-an-api-key-instead-of-a-wallet): no wallet is used |
+| `TELEGRAPH_API_URL` | `https://backend.telegraphprotocol.com` | Where the API key is used |
 | `TELEGRAPH_ALLOW_AGENT_DEPOSIT` | off | Also give the agent a `telegraph_deposit` tool |
 | `TELEGRAPH_URL` | `https://devnode.telegraphprotocol.com` | The node (Telegraph beta 2) |
 | `TELEGRAPH_RPC_URL`, `TELEGRAPH_DIAMOND`, `TELEGRAPH_CHAIN_ID` | beta 2's | The chain and the contract that holds escrow |
+
+## Using an API key instead of a wallet
+
+If you have an Anjoman account, you can skip the wallet. Create a key on the **API keys** page (`https://anjoman.ai/dashboard/api-keys`), deposit into your account there, and set it in your agent's settings:
+
+```json
+{"mcpServers": {"telegraph": {"command": "npx", "args": ["-y", "@telegraphprotocol/telegraph-protocol-mcp"], "env": {"TELEGRAPH_API_KEY": "tgk_your_key_here"}}}}
+```
+
+No `setup` is needed. In key mode:
+
+- `telegraph_ask` goes through your Anjoman account, which picks the sources, can combine several for one question, and writes the answer. It is paid from the account's escrow balance. A question can take up to a minute.
+- `telegraph_account` shows the account's escrow balance and what its last jobs cost. Top up in Anjoman: this server cannot deposit.
+- `telegraph_ask_miner` and `telegraph_deposit` are not offered: a key cannot call one miner directly or move funds.
+- The free tools (`telegraph_find_intents`, `telegraph_intent`, `telegraph_find_miners`, `telegraph_ranking`, `telegraph_docs`) work as before.
+- The wallet, `TELEGRAPH_PAYMENT` and the per-ask and daily limits do not apply. The account's balance and the key's own limits (30 requests a minute, an optional expiry) do. Revoke the key in Anjoman to cut off an agent at once.
+
+Treat the key like a password: it can spend your balance. Keep it in an agent's settings, not in a repository.
 
 ## Tools
 
