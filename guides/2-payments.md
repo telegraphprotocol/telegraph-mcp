@@ -2,6 +2,10 @@
 
 Each ask costs the price of the miner endpoint that answers, usually $0.01 in USDC. The server pays from your Telegraph escrow, on its own.
 
+## With an Anjoman API key
+
+If `TELEGRAPH_API_KEY` is set, none of the below applies: asks go through your Anjoman account, which pays from its own escrow balance. There is no wallet, no signing and no `fund` or `withdraw`. Deposit in Anjoman (sign in, then Deposit in the wallet menu); `telegraph_account` shows the balance and what recent jobs cost. An empty balance is refused with a message and nothing is charged. The spending limits below do not apply; the balance does, and so does the key's limit of 30 requests a minute.
+
 ## Escrow (the default)
 
 You deposit USDC into your Telegraph escrow once: run `npx -y @telegraphprotocol/telegraph-protocol-mcp fund` in a terminal and confirm. Each ask then carries a signature the server makes for you. It proves you asked, but it can't move your funds. The node checks your balance, and the epoch's asks are deducted together when the epoch closes. A failed ask is never billed.

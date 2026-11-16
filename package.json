@@ -1,6 +1,6 @@
 {
   "name": "@telegraphprotocol/telegraph-protocol-mcp",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "MCP server for the Telegraph network: ask ranked miners (prices, FX, weather, search, security, code review and 100+ intents), browse intents, miners and rankings, and pay from escrow or by x402 in USDC",
   "mcpName": "io.github.telegraphprotocol/telegraph",
   "main": "dist/index.js",

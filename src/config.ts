@@ -17,6 +17,8 @@ export interface Config {
   maxAskUsd: number; // refuse to sign for one ask above this
   dailyLimitUsd: number; // refuse to sign once today's asks reach this
   agentDeposit: boolean; // also give the agent a telegraph_deposit tool
+  apiKey?: string; // an Anjoman API key (tgk_…): asks go through that account instead of this server's wallet
+  apiUrl: string; // where the key is used
 }
 
 // Telegraph beta 2 on Ethereum Sepolia: the default network, so the server
@@ -26,6 +28,7 @@ const DEFAULTS = {
   diamond: "0x3624EB012B5E998BB57B6bE6C9Cfc9c4bc5eb99b",
   chainId: 11155111,
   rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
+  apiUrl: "https://backend.telegraphprotocol.com",
 };
 
 const number = (raw: string | undefined, fallback: number, what: string) => {
@@ -47,6 +50,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (payment !== "auto" && payment !== "escrow" && payment !== "x402") {
     throw new Error("TELEGRAPH_PAYMENT must be escrow, x402 or auto");
   }
+  const apiKey = (env.TELEGRAPH_API_KEY || "").trim();
+  if (apiKey && !/^tgk_[A-Za-z0-9_-]{20,}$/.test(apiKey)) {
+    throw new Error("TELEGRAPH_API_KEY must be an Anjoman API key, which starts with tgk_ (create one on the API keys page)");
+  }
   const diamond = env.TELEGRAPH_DIAMOND || DEFAULTS.diamond;
   if (!/^0x[0-9a-fA-F]{40}$/.test(diamond)) throw new Error("TELEGRAPH_DIAMOND must be an address");
   return {
@@ -60,5 +67,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxAskUsd: number(env.TELEGRAPH_MAX_ASK_USD, 0.5, "TELEGRAPH_MAX_ASK_USD"),
     dailyLimitUsd: number(env.TELEGRAPH_DAILY_LIMIT_USD, 5, "TELEGRAPH_DAILY_LIMIT_USD"),
     agentDeposit: /^(1|true|yes)$/i.test(env.TELEGRAPH_ALLOW_AGENT_DEPOSIT || ""),
+    apiKey: apiKey || undefined,
+    apiUrl: (env.TELEGRAPH_API_URL || DEFAULTS.apiUrl).replace(/\/+$/, ""),
   };
 }

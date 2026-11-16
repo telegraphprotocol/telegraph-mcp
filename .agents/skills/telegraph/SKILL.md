@@ -4,7 +4,7 @@ description: Use the Telegraph network through its MCP server. Activate when the
 license: MIT
 homepage: https://github.com/telegraphprotocol/telegraph-mcp
 metadata:
-  version: 2.0.0
+  version: 2.1.0
   homepage: https://github.com/telegraphprotocol/telegraph-mcp
   documentation: https://docs.telegraphprotocol.com
   keywords: [mcp, x402, escrow, usdc, miners, ranking, ai-agents, web3, agent-payments]

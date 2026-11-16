@@ -5,6 +5,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Config } from "./config.js";
 import { Payer, type PaidResponse } from "./pay.js";
 import { Chain } from "./chain.js";
+import { AnjomanApi, type AskResult } from "./api.js";
 import { cached, getJson } from "./http.js";
 import { loadGuides, searchGuides } from "./docs.js";
 
@@ -49,7 +50,9 @@ const round = (x: number, d = 4) => Math.round(x * 10 ** d) / 10 ** d;
 const name = (s: string) => s.trim().toUpperCase();
 
 export function registerTools(server: McpServer, cfg: Config): Payer | undefined {
-  const payer = cfg.privateKey ? new Payer(cfg, cfg.privateKey) : undefined;
+  // With an API key, asks go through the user's Anjoman account, which pays for them: the wallet is not used.
+  const api = cfg.apiKey ? new AnjomanApi(cfg.apiUrl, cfg.apiKey) : undefined;
+  const payer = cfg.privateKey && !api ? new Payer(cfg, cfg.privateKey) : undefined;
   const chain = new Chain(cfg);
   const intents = cached(() => getJson(`${cfg.url}/engine/v1/intents`).then((d) => d.intents as any[]));
   const miners = cached(() => getJson(`${cfg.url}/engine/v1/miners`, 60_000).then((d) => d.miners as any[]));
@@ -82,18 +85,31 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
     "telegraph_ask",
     {
       title: "Ask Telegraph",
-      description:
-        "Ask the Telegraph network a question: live prices, FX, weather, web and academic search, security, code " +
-        "review, compliance and 100+ other intents. The node routes it to the best-ranked live miner and returns " +
-        "its answer in the intent's fields. Costs about $0.01, paid automatically from the Telegraph escrow balance " +
-        "(a failed ask is never billed; repeating the same ask within a minute is not paid twice).",
+      description: api
+        ? "Ask Anjoman a question: live prices, FX, weather, web and academic search, security, code review, " +
+          "compliance and 100+ other intents. It picks the best-ranked sources, can combine several for one " +
+          "question, and writes the answer. Paid from the Anjoman account's escrow balance (a few cents at most per " +
+          "question); an empty balance is refused with a message and nothing is charged. A question can take up to a minute."
+        : "Ask the Telegraph network a question: live prices, FX, weather, web and academic search, security, code " +
+          "review, compliance and 100+ other intents. The node routes it to the best-ranked live miner and returns " +
+          "its answer in the intent's fields. Costs about $0.01, paid automatically from the Telegraph escrow balance " +
+          "(a failed ask is never billed; repeating the same ask within a minute is not paid twice).",
       inputSchema: askShape,
       annotations: paid,
     },
-    guard(async (a) => (payer ? answer(await payer.post("/engine/v1/ask", askBody(a))) : fail(NO_KEY))),
+    guard(async (a) => {
+      if (api) {
+        if (a.params && !a.intent) throw new Error("params need an intent.");
+        if (!a.question && !a.params) throw new Error("Give a question, or an intent with params.");
+        const intent = a.intent ? name(a.intent) : undefined;
+        return keyAnswer(await api.ask({ message: a.question || `Ask ${intent}`, intent, params: a.params }));
+      }
+      return payer ? answer(await payer.post("/engine/v1/ask", askBody(a))) : fail(NO_KEY);
+    }),
   );
 
-  server.registerTool(
+  // One specific miner is a call to the node's engine, which an API key cannot make: key mode has only telegraph_ask.
+  if (!api) server.registerTool(
     "telegraph_ask_miner",
     {
       title: "Ask one miner",
@@ -277,6 +293,7 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
       annotations: free,
     },
     guard(async ({ address }) => {
+      if (api && !address) return ok(await api.account());
       const who = address || payer?.account.address;
       if (!who) return fail(NO_KEY);
       if (!/^0x[0-9a-fA-F]{40}$/.test(who)) return fail(`Not an address: ${who}`);
@@ -291,7 +308,7 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
     }),
   );
 
-  if (cfg.agentDeposit) server.registerTool(
+  if (cfg.agentDeposit && !api) server.registerTool(
     "telegraph_deposit",
     {
       title: "Deposit to escrow",
@@ -345,6 +362,20 @@ function rankingRows(board: any, intent: string) {
   return ((board?.intents?.[intent] as any[]) || []).map((r) => ({
     rank: r.rank, miner: r.miner_slug, score: round(r.score), status: r.activation_status,
   }));
+}
+
+// A reply from the Anjoman account's agent chat. A turn that could not answer still carries its explanation as the answer.
+export function keyAnswer(r: AskResult): Text {
+  const reply = {
+    status: r.status,
+    answer: r.answer,
+    sources: r.sources,
+    cost_usd: r.costUsd,
+    conversation_id: r.conversationId,
+    job_id: r.jobId,
+    note: r.note,
+  };
+  return r.status === "running" || r.status === "cancelled" || r.status === "interrupted" ? fail(JSON.stringify(reply, null, 2)) : ok(reply);
 }
 
 function answer(r: PaidResponse, oneMiner = false): Text {

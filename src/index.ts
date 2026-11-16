@@ -13,7 +13,9 @@ const INSTRUCTIONS =
   "network's own checks. Use telegraph_ask for live facts (prices, FX, weather, search) and specialist answers " +
   "(security, code review, compliance); payment from the user's Telegraph escrow is automatic. " +
   "telegraph_find_intents, telegraph_intent, telegraph_find_miners and telegraph_ranking are free. " +
-  "telegraph_account shows the balances and how the user tops up; telegraph_docs explains payments and errors.";
+  "telegraph_account shows the balances and how the user tops up; telegraph_docs explains payments and errors. " +
+  "When TELEGRAPH_API_KEY is set, telegraph_ask goes through the user's Anjoman account (no wallet), and " +
+  "telegraph_ask_miner and telegraph_deposit are not offered.";
 
 async function main() {
   // A person running a command (setup, fund, status, install); with none, an MCP client is starting the server.
@@ -27,7 +29,9 @@ async function main() {
   const payer = registerTools(server, cfg);
   await server.connect(new StdioServerTransport());
   console.error(
-    `[telegraph-mcp] v${version} on ${cfg.url}; wallet ${payer?.account.address ?? "none (free tools only)"}; payment ${cfg.payment}`,
+    cfg.apiKey
+      ? `[telegraph-mcp] v${version} on ${cfg.url}; API key ${cfg.apiKey.slice(0, 12)}… through ${cfg.apiUrl}; no wallet used`
+      : `[telegraph-mcp] v${version} on ${cfg.url}; wallet ${payer?.account.address ?? "none (free tools only)"}; payment ${cfg.payment}`,
   );
 }
 
