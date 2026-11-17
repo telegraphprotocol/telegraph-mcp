@@ -56,7 +56,7 @@ All optional.
 | `TELEGRAPH_DAILY_LIMIT_USD` | `5` | The most all asks may cost in a UTC day. `0` means no limit |
 | `TELEGRAPH_HOME` | `~/.telegraph` | Where the wallet and the day's spending are kept |
 | `TELEGRAPH_PRIVATE_KEY` | none | Use this key instead of the wallet file. For servers and CI. (`TELEGRAPH_EVM_PRIVATE_KEY`, the v1 name, also works.) |
-| `TELEGRAPH_API_KEY` | none | An Anjoman API key (`tgk_…`). Switches to [key mode](#using-an-api-key-instead-of-a-wallet): no wallet is used |
+| `TELEGRAPH_API_KEY` | none | An Anjoman API key (`anjoman_…`). Switches to [key mode](#using-an-api-key-instead-of-a-wallet): no wallet is used |
 | `TELEGRAPH_API_URL` | `https://backend.telegraphprotocol.com` | Where the API key is used |
 | `TELEGRAPH_ALLOW_AGENT_DEPOSIT` | off | Also give the agent a `telegraph_deposit` tool |
 | `TELEGRAPH_URL` | `https://devnode.telegraphprotocol.com` | The node (Telegraph beta 2) |
@@ -67,7 +67,7 @@ All optional.
 If you have an Anjoman account, you can skip the wallet. Create a key on the **API keys** page (`https://anjoman.ai/dashboard/api-keys`), deposit into your account there, and set it in your agent's settings:
 
 ```json
-{"mcpServers": {"telegraph": {"command": "npx", "args": ["-y", "@telegraphprotocol/telegraph-protocol-mcp"], "env": {"TELEGRAPH_API_KEY": "tgk_your_key_here"}}}}
+{"mcpServers": {"telegraph": {"command": "npx", "args": ["-y", "@telegraphprotocol/telegraph-protocol-mcp"], "env": {"TELEGRAPH_API_KEY": "anjoman_your_key_here"}}}}
 ```
 
 No `setup` is needed. In key mode:

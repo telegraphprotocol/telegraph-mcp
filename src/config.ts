@@ -17,7 +17,7 @@ export interface Config {
   maxAskUsd: number; // refuse to sign for one ask above this
   dailyLimitUsd: number; // refuse to sign once today's asks reach this
   agentDeposit: boolean; // also give the agent a telegraph_deposit tool
-  apiKey?: string; // an Anjoman API key (tgk_…): asks go through that account instead of this server's wallet
+  apiKey?: string; // an Anjoman API key (anjoman_…): asks go through that account instead of this server's wallet
   apiUrl: string; // where the key is used
 }
 
@@ -51,8 +51,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error("TELEGRAPH_PAYMENT must be escrow, x402 or auto");
   }
   const apiKey = (env.TELEGRAPH_API_KEY || "").trim();
-  if (apiKey && !/^tgk_[A-Za-z0-9_-]{20,}$/.test(apiKey)) {
-    throw new Error("TELEGRAPH_API_KEY must be an Anjoman API key, which starts with tgk_ (create one on the API keys page)");
+  // Keys made before the prefix changed start with tgk_ and still work.
+  if (apiKey && !/^(anjoman|tgk)_[A-Za-z0-9_-]{20,}$/.test(apiKey)) {
+    throw new Error("TELEGRAPH_API_KEY must be an Anjoman API key, which starts with anjoman_ (create one on the API keys page)");
   }
   const diamond = env.TELEGRAPH_DIAMOND || DEFAULTS.diamond;
   if (!/^0x[0-9a-fA-F]{40}$/.test(diamond)) throw new Error("TELEGRAPH_DIAMOND must be an address");

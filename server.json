@@ -18,7 +18,7 @@
       "environmentVariables": [
         {
           "name": "TELEGRAPH_API_KEY",
-          "description": "Optional: an Anjoman API key (tgk_…, from the API keys page). Asks then go through your Anjoman account, which pays from its own balance, and no wallet is used.",
+          "description": "Optional: an Anjoman API key (anjoman_…, from the API keys page). Asks then go through your Anjoman account, which pays from its own balance, and no wallet is used.",
           "isRequired": false,
           "isSecret": true,
           "format": "string"
