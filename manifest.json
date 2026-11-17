@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "telegraph",
   "display_name": "Telegraph",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Ask Telegraph's ranked miners for prices, FX, weather, search and specialist answers, paid from your Telegraph escrow.",
   "author": {
     "name": "Telegraph Protocol",
