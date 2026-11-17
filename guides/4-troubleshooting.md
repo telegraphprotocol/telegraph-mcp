@@ -22,7 +22,11 @@ Too many new questions in one minute. Wait a minute.
 
 ## 402 escrow balance too low
 
-The escrow can't cover the ask. Nothing was charged. The user runs `npx -y @telegraphprotocol/telegraph-protocol-mcp fund` in a terminal, then asks again. (Only with `TELEGRAPH_PAYMENT=auto` would the server pay from the wallet by x402 instead.)
+The escrow can't cover the ask. A `telegraph_ask` holds its whole budget (`TELEGRAPH_MAX_BUDGET_USDC`, default $0.26) while it runs, so the balance must cover that. Nothing was charged. The user runs `npx -y @telegraphprotocol/telegraph-protocol-mcp fund` in a terminal, then asks again, or lowers `TELEGRAPH_MAX_BUDGET_USDC`. (Only with `TELEGRAPH_PAYMENT=auto` would the server pay from the wallet by x402 instead.)
+
+## 400 invalid request body: max_budget_usdc
+
+The node takes a budget from one call up to the most it allows, and says the range. Nothing was charged. Set `TELEGRAPH_MAX_BUDGET_USDC` in that range, or `0` to ask one miner only.
 
 ## Over a spending limit
 

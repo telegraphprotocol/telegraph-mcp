@@ -1,18 +1,15 @@
-import { createPublicClient, createWalletClient, defineChain, formatUnits, http, parseAbi, parseUnits } from "viem";
+import { createPublicClient, createWalletClient, defineChain, formatUnits, http, parseAbi, parseUnits, toFunctionSelector } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 import type { Config } from "./config.js";
+import { getJson } from "./http.js";
 
+// The ledger diamond: deposits and withdrawal requests are on chain; charges and
+// credits are in the node's ledger roots, so balances are read from the node.
 const escrowAbi = parseAbi([
   "function usdcToken() view returns (address)",
-  "function effectiveBalance(address user) view returns (uint256)",
-  "function escrowBalance(address user) view returns (uint256)",
-  "function agentDebt(address user) view returns (uint256)",
-  "function pendingWithdrawal(address user) view returns (uint256 amount, uint256 unlockTime)",
-  "function withdrawalUnlock(address user) view returns (uint256 unlockSequence, uint256 unlockTime, bool unlocked)",
+  "function withdrawalStatus(address user) view returns (uint256 requested, uint256 requestedAt, uint256 needsCutoff, uint256 fallbackAt, bool unlocked)",
   "function depositUSDC(uint256 amount)",
   "function requestWithdraw(uint256 amount)",
-  "function executeWithdraw()",
-  "function cancelWithdraw()",
 ]);
 
 const erc20Abi = parseAbi([
@@ -21,7 +18,16 @@ const erc20Abi = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
 ]);
 
+// executeWithdraw and executeWithdrawFallback: the only calls a node's proof may make.
+const WITHDRAW_SELECTORS = [
+  "executeWithdraw(uint64,(uint32,address,uint64,uint64,bytes)[])",
+  "executeWithdrawFallback(uint64,(uint32,address,uint64,uint64,bytes)[][])",
+].map((sig): string => toFunctionSelector(`function ${sig}`));
+
 const usd = (v: bigint) => Number(formatUnits(v, 6));
+// The node's ledger amounts are μUSDC decimal strings.
+const usdOf = (v: unknown) => Number(v ?? 0) / 1e6;
+const at = (unix: unknown) => (Number(unix) > 0 ? new Date(Number(unix) * 1000).toISOString() : undefined);
 
 export class Chain {
   private chain;
@@ -43,17 +49,17 @@ export class Chain {
     return this.usdc;
   }
 
+  // GET /v1/ledger/account: the balance asks spend against, and any withdrawal request.
+  private ledger(address: `0x${string}`) {
+    return getJson(`${this.cfg.url}/v1/ledger/account/${address}`);
+  }
+
   async account(address: `0x${string}`) {
     const usdc = await this.usdcAddress();
-    const read = (functionName: "effectiveBalance" | "escrowBalance" | "agentDebt") =>
-      this.pub.readContract({ address: this.cfg.diamond, abi: escrowAbi, functionName, args: [address] });
-    const [wallet, eth, spendable, deposited, debt, pending] = await Promise.all([
+    const [wallet, eth, l] = await Promise.all([
       this.pub.readContract({ address: usdc, abi: erc20Abi, functionName: "balanceOf", args: [address] }),
       this.pub.getBalance({ address }),
-      read("effectiveBalance"),
-      read("escrowBalance"),
-      read("agentDebt"),
-      this.pub.readContract({ address: this.cfg.diamond, abi: escrowAbi, functionName: "pendingWithdrawal", args: [address] }),
+      this.ledger(address),
     ]);
     return {
       address,
@@ -65,10 +71,12 @@ export class Chain {
       wallet_usdc: usd(wallet),
       wallet_eth: Number(formatUnits(eth, 18)),
       escrow: {
-        spendable_usdc: usd(spendable),
-        deposited_usdc: usd(deposited),
-        debt_usdc: usd(debt),
-        pending_withdrawal_usdc: usd(pending[0]),
+        spendable_usdc: usdOf(l.available),
+        balance_usdc: usdOf(l.balance),
+        deposited_usdc: usdOf(l.deposited),
+        unbilled_usdc: usdOf(l.unbilled),
+        pending_withdrawal_usdc: usdOf(l.request?.amount),
+        withdrawal_status: l.request?.status ?? "none",
       },
     };
   }
@@ -98,29 +106,38 @@ export class Chain {
     return { amount_usdc: amountUsd, transactions: txs, escrow_now: (await this.account(account.address)).escrow };
   }
 
-  // When a pending withdrawal may be executed: once `withdrawBlocks` more
-  // settlement blocks pass, or at `unlockTime`, whichever comes first.
-  async withdrawalUnlock(address: `0x${string}`) {
-    const [unlockSequence, unlockTime, unlocked] = await this.pub.readContract({
-      address: this.cfg.diamond, abi: escrowAbi, functionName: "withdrawalUnlock", args: [address],
-    });
-    return { unlockSequence, unlockAt: new Date(Number(unlockTime) * 1000), unlocked };
+  // Where a withdrawal request stands, by the node: "ready" or "fallback_open"
+  // can be executed; "waiting_root" and "waiting_activation" wait for a ledger
+  // root that covers the request to activate.
+  async withdrawal(address: `0x${string}`) {
+    const r = (await this.ledger(address)).request || {};
+    return { status: String(r.status || "none"), amount_usdc: usdOf(r.amount), fallback_at: at(r.fallback_at) };
   }
 
   // Taking money out is two steps on chain, with a wait between them: the
-  // amount leaves the spendable balance at once, and settlement still collects
-  // what the agent already owes from it.
+  // amount stops paying for asks at once, and is paid out against a ledger root
+  // that covers the request, so asks already served are charged first.
   async requestWithdraw(account: PrivateKeyAccount, amountUsd: number) {
     const amount = parseUnits(amountUsd.toFixed(6), 6);
     const wallet = createWalletClient({ account, chain: this.chain, transport: http(this.cfg.rpcUrl) });
     const hash = await wallet.writeContract({ address: this.cfg.diamond, abi: escrowAbi, functionName: "requestWithdraw", args: [amount] });
     await this.waitOk(hash, "requestWithdraw");
-    return { amount_usdc: amountUsd, transaction: hash, unlock: await this.withdrawalUnlock(account.address) };
+    const [, , needsCutoff, fallbackAt] = await this.pub.readContract({
+      address: this.cfg.diamond, abi: escrowAbi, functionName: "withdrawalStatus", args: [account.address],
+    });
+    return { amount_usdc: amountUsd, transaction: hash, needs_root_after: at(needsCutoff), fallback_at: at(fallbackAt) };
   }
 
+  // Sends the node's ready-made executeWithdraw (or, past the fallback time,
+  // executeWithdrawFallback) calldata, which carries the proof of this account.
   async executeWithdraw(account: PrivateKeyAccount) {
+    const proof = await getJson(`${this.cfg.url}/v1/ledger/proof/${account.address}`);
+    const data = String(proof.calldata || "");
+    if (!/^0x[0-9a-fA-F]+$/.test(data) || !WITHDRAW_SELECTORS.includes(data.slice(0, 10).toLowerCase())) {
+      throw new Error("the node returned no withdrawal calldata");
+    }
     const wallet = createWalletClient({ account, chain: this.chain, transport: http(this.cfg.rpcUrl) });
-    const hash = await wallet.writeContract({ address: this.cfg.diamond, abi: escrowAbi, functionName: "executeWithdraw" });
+    const hash = await wallet.sendTransaction({ to: this.cfg.diamond, data: data as `0x${string}` });
     await this.waitOk(hash, "executeWithdraw");
     const after = await this.account(account.address);
     return { transaction: hash, wallet_usdc: after.wallet_usdc, escrow_now: after.escrow };

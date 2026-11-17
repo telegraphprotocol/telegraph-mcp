@@ -16,25 +16,34 @@ export interface Config {
   home: string; // where the wallet and the spending record live
   maxAskUsd: number; // refuse to sign for one ask above this
   dailyLimitUsd: number; // refuse to sign once today's asks reach this
+  maxBudgetUsdc: number; // max_budget_usdc sent with each routed ask, in μUSDC (0: none, a single-miner ask)
   agentDeposit: boolean; // also give the agent a telegraph_deposit tool
   apiKey?: string; // an Anjoman API key (anjoman_…): asks go through that account instead of this server's wallet
   apiUrl: string; // where the key is used
 }
 
-// Telegraph beta 2 on Ethereum Sepolia: the default network, so the server
+// The Telegraph testnet on Ethereum Sepolia: the default network, so the server
 // works with no settings at all.
 const DEFAULTS = {
   url: "https://devnode.telegraphprotocol.com",
-  diamond: "0x3624EB012B5E998BB57B6bE6C9Cfc9c4bc5eb99b",
+  diamond: "0x72a70e949362670Bf8bceAd24eFC5b8f950aa08b",
   chainId: 11155111,
   rpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
   apiUrl: "https://backend.telegraphprotocol.com",
+  // One call plus up to $0.25 of other miners: the most the testnet node takes.
+  maxBudgetUsdc: 260_000,
 };
 
 const number = (raw: string | undefined, fallback: number, what: string) => {
   if (raw === undefined || raw.trim() === "") return fallback;
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) throw new Error(`${what} must be a number of 0 or more`);
+  return n;
+};
+
+const wholeNumber = (raw: string | undefined, fallback: number, what: string) => {
+  const n = number(raw, fallback, what);
+  if (!Number.isSafeInteger(n)) throw new Error(`${what} must be a whole number`);
   return n;
 };
 
@@ -67,6 +76,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     home,
     maxAskUsd: number(env.TELEGRAPH_MAX_ASK_USD, 0.5, "TELEGRAPH_MAX_ASK_USD"),
     dailyLimitUsd: number(env.TELEGRAPH_DAILY_LIMIT_USD, 5, "TELEGRAPH_DAILY_LIMIT_USD"),
+    maxBudgetUsdc: wholeNumber(env.TELEGRAPH_MAX_BUDGET_USDC, DEFAULTS.maxBudgetUsdc, "TELEGRAPH_MAX_BUDGET_USDC"),
     agentDeposit: /^(1|true|yes)$/i.test(env.TELEGRAPH_ALLOW_AGENT_DEPOSIT || ""),
     apiKey: apiKey || undefined,
     apiUrl: (env.TELEGRAPH_API_URL || DEFAULTS.apiUrl).replace(/\/+$/, ""),

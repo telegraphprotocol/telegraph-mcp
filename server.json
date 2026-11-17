@@ -59,6 +59,12 @@
           "description": "Most all asks may cost in a UTC day. Default 5.",
           "isRequired": false,
           "format": "string"
+        },
+        {
+          "name": "TELEGRAPH_MAX_BUDGET_USDC",
+          "description": "max_budget_usdc each ask sends, in micro-USDC, the first call included. Default 260000; 0 asks one miner only.",
+          "isRequired": false,
+          "format": "string"
         }
       ]
     }

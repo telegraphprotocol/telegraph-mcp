@@ -11,7 +11,8 @@ export interface PaidResponse {
   rail?: "escrow" | "x402";
   receipt?: unknown;
   escrowRefused?: string; // why escrow refused the ask (a top-up message, or the reason before an x402 payment)
-  priceUsd?: number; // what the node asked for this call
+  priceUsd?: number; // what the node asked for this call (with max_budget_usdc, the budget)
+  billedUsd?: number; // what a delivered ask was billed
   repeated?: boolean; // answered from an identical ask a moment ago: not paid again
 }
 
@@ -89,10 +90,14 @@ export class Payer {
       try {
         const res = await send({ "X-PAYMENT": await this.escrowHeader(escrow) });
         const resBody = await readJson(res);
+        const receipt = receiptOf(res);
         charged = res.status >= 200 && res.status < 300; // escrow bills only a delivered ask
+        // The hold was the budget; only the ask's payment rows are billed.
+        const billedUsd = charged ? billedOf(resBody, receipt, priceUsd) : undefined;
+        if (billedUsd !== undefined) this.spent.add(billedUsd - priceUsd);
         if (res.status !== 402 || this.cfg.payment === "escrow") {
           const refused = res.status === 402 ? String(resBody?.reason || resBody?.error || "refused") : undefined;
-          return { status: res.status, body: resBody, rail: "escrow", receipt: receiptOf(res), escrowRefused: refused, priceUsd };
+          return { status: res.status, body: resBody, rail: "escrow", receipt, escrowRefused: refused, priceUsd, billedUsd };
         }
         escrowRefused = String(resBody?.reason || resBody?.error || "refused");
         if (escrowRefused.includes("insufficient")) this.escrowEmptyUntil = Date.now() + ESCROW_SKIP_MS;
@@ -119,7 +124,11 @@ export class Payer {
       // x402 settles before the miner runs, so a failed ask is charged and
       // credited back to escrow. A payment the node refuses charges nothing.
       charged = res.status !== 402;
-      return { status: res.status, body: await readJson(res), rail: "x402", receipt: receiptOf(res), escrowRefused, priceUsd };
+      // The whole payment counts against the limits: what was not billed is credited to escrow, not the wallet.
+      const resBody = await readJson(res);
+      const receipt = receiptOf(res);
+      const billedUsd = res.status >= 200 && res.status < 300 ? billedOf(resBody, receipt, priceUsd) : undefined;
+      return { status: res.status, body: resBody, rail: "x402", receipt, escrowRefused, priceUsd, billedUsd };
     } finally {
       if (!charged) this.spent.add(-priceUsd);
     }
@@ -153,6 +162,16 @@ export class Payer {
 
 // Challenge amounts are micro-USDC strings.
 const usdOf = (amount: unknown) => Number(amount ?? 0) / 1e6;
+
+// What a delivered ask was billed: its payment rows (fulfillment.payments, an
+// ask with max_budget_usdc), else the receipt's one row; never above what was paid.
+export function billedOf(body: any, receipt: any, paidUsd: number): number {
+  const rows = body?.fulfillment?.payments;
+  const uusdc = Array.isArray(rows) && rows.length
+    ? rows.reduce((sum: number, p: any) => sum + Number(p?.amount_uusdc), 0)
+    : Number(receipt?.amount_uusdc);
+  return Number.isFinite(uusdc) && uusdc >= 0 ? Math.min(Math.round(uusdc) / 1e6, paidUsd) : paidUsd;
+}
 
 async function readJson(res: Response): Promise<any> {
   const text = await res.text();

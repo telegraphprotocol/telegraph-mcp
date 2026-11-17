@@ -7,7 +7,8 @@ import { loadConfig } from "../dist/config.js";
 import { saveWallet, readWalletKey, newKey, walletPath, walletUnreadable } from "../dist/wallet.js";
 import { Dedupe, SpendLog, requestKey } from "../dist/limits.js";
 import { AnjomanApi } from "../dist/api.js";
-import { keyAnswer } from "../dist/tools.js";
+import { keyAnswer, routedAskBody } from "../dist/tools.js";
+import { Payer, billedOf } from "../dist/pay.js";
 
 const home = () => mkdtempSync(join(tmpdir(), "tg-mcp-"));
 
@@ -201,4 +202,82 @@ test("a turn that ended without an answer is an error for the agent, and one tha
   assert.equal(keyAnswer({ status: "cancelled" }).isError, true);
   assert.equal(keyAnswer({ status: "running", jobId: "j1", note: "still going" }).isError, true);
   assert.equal(keyAnswer({ status: "failed", answer: "I couldn't get that: the account has no balance." }).isError, undefined);
+});
+
+test("the default network is the new testnet diamond, and asks carry a budget of 260000 μUSDC", () => {
+  const c = loadConfig({ TELEGRAPH_HOME: home() });
+  assert.equal(c.diamond, "0x72a70e949362670Bf8bceAd24eFC5b8f950aa08b");
+  assert.equal(c.maxBudgetUsdc, 260000);
+  assert.equal(loadConfig({ TELEGRAPH_HOME: home(), TELEGRAPH_MAX_BUDGET_USDC: "60000" }).maxBudgetUsdc, 60000);
+  assert.equal(loadConfig({ TELEGRAPH_HOME: home(), TELEGRAPH_MAX_BUDGET_USDC: "0" }).maxBudgetUsdc, 0);
+  assert.throws(() => loadConfig({ TELEGRAPH_HOME: home(), TELEGRAPH_MAX_BUDGET_USDC: "0.26" }), /whole number/);
+  assert.throws(() => loadConfig({ TELEGRAPH_HOME: home(), TELEGRAPH_MAX_BUDGET_USDC: "-1" }));
+});
+
+test("a routed ask sends max_budget_usdc, capped by the per-ask limit, and none when it is 0", () => {
+  const q = { query: "BTC price" };
+  assert.deepEqual(routedAskBody({ maxBudgetUsdc: 260000, maxAskUsd: 0.5 }, q), { query: "BTC price", max_budget_usdc: 260000 });
+  assert.equal(routedAskBody({ maxBudgetUsdc: 260000, maxAskUsd: 0.05 }, q).max_budget_usdc, 50000, "never above TELEGRAPH_MAX_ASK_USD");
+  assert.equal(routedAskBody({ maxBudgetUsdc: 260000, maxAskUsd: 0 }, q).max_budget_usdc, 260000, "0 means no per-ask limit");
+  assert.deepEqual(routedAskBody({ maxBudgetUsdc: 0, maxAskUsd: 0.5 }, q), q, "0: a single-miner ask");
+  assert.deepEqual(routedAskBody({ maxBudgetUsdc: 260000, maxAskUsd: 0.005 }, q), q, "under one call: none, so the limit refuses the ask");
+});
+
+test("what an ask was billed: its payment rows, else the receipt, never above what was paid", () => {
+  const payments = [{ amount_uusdc: 10000 }, { amount_uusdc: "20000" }];
+  assert.equal(billedOf({ fulfillment: { payments } }, { amount_uusdc: "10000" }, 0.26), 0.03);
+  assert.equal(billedOf({}, { amount_uusdc: "10000" }, 0.26), 0.01);
+  assert.equal(billedOf({}, undefined, 0.26), 0.26, "unknown: counted in full");
+  assert.equal(billedOf({ fulfillment: { payments: [{ amount_uusdc: 900000 }] } }, undefined, 0.26), 0.26);
+});
+
+test("an escrow ask signs for the budget the node quotes and counts only what was billed", async () => {
+  const h = home();
+  const cfg = loadConfig({ TELEGRAPH_HOME: h, TELEGRAPH_PRIVATE_KEY: newKey(), TELEGRAPH_URL: "http://node.test" });
+  const diamond = "0x72a70e949362670bf8bcead24efc5b8f950aa08b";
+  const challenge = {
+    x402Version: 2,
+    error: "Payment required",
+    resource: { url: "http://node.test/engine/v1/ask", description: "ask", mimeType: "application/json" },
+    accepts: [{
+      scheme: "escrow", network: "eip155:11155111", amount: "260000", payTo: diamond,
+      extra: { message: "Telegraph Escrow Payment\n\nWallet: {from}\nPay To: " + diamond + "\nNetwork: eip155:11155111\nAmount: 260000 uUSDC\nResource: /v1/ask\nNonce: {nonce}\nValid After: {validAfter}\nValid Before: {validBefore}" },
+    }],
+  };
+  const receipt = { receipt_hash: "0x01", rail: "escrow", amount_uusdc: "10000" };
+  const reply = {
+    result: { price_usd: 1 }, intent: "CRYPTO_PRICE_USD",
+    fulfillment: { status: "complete", stopped: "complete", payments: [
+      { miner: "1", intent: "CRYPTO_PRICE_USD", amount_uusdc: 10000, receipt_hash: "0x01" },
+      { miner: "2", intent: "CRYPTO_VOLUME_USD", amount_uusdc: 10000, receipt_hash: "0x02" },
+    ] },
+  };
+  const sent = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    sent.push({ url: String(url), body: JSON.parse(init.body), payment: init.headers["X-PAYMENT"] });
+    if (sent.length === 1) {
+      return new Response(JSON.stringify({ error: "payment required" }), {
+        status: 402, headers: { "PAYMENT-REQUIRED": Buffer.from(JSON.stringify(challenge)).toString("base64") },
+      });
+    }
+    return new Response(JSON.stringify(reply), {
+      status: 200, headers: { "X-PAYMENT-RESPONSE": Buffer.from(JSON.stringify(receipt)).toString("base64") },
+    });
+  };
+  try {
+    const body = routedAskBody(cfg, { query: "BTC price and volume" });
+    const r = await new Payer(cfg, cfg.privateKey).post("/engine/v1/ask", body);
+    assert.equal(sent[0].body.max_budget_usdc, 260000, "the budget goes with the ask");
+    const envelope = JSON.parse(Buffer.from(sent[1].payment, "base64").toString());
+    assert.equal(envelope.scheme, "escrow");
+    assert.equal(envelope.payload.authorization.value, "260000", "signed for the quoted budget");
+    assert.equal(envelope.payload.authorization.to, diamond);
+    assert.equal(r.status, 200);
+    assert.equal(r.priceUsd, 0.26);
+    assert.equal(r.billedUsd, 0.02, "two rows billed");
+    assert.equal(new SpendLog(h).today(), 0.02, "the daily limit counts the rows, not the hold");
+  } finally {
+    globalThis.fetch = original;
+  }
 });

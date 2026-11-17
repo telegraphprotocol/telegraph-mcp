@@ -58,7 +58,8 @@ function newWalletHome(usdc) {
   }
   return { home, addr, setupOut: s.stdout };
 }
-const escrow = (addr) => num(cast("call", DIAMOND, "effectiveBalance(address)(uint256)", addr)) / 1e6;
+// What the wallet deposited, on chain (the ledger diamond's ledgerAccount).
+const escrow = (addr) => num(cast("call", DIAMOND, "ledgerAccount(address)(uint256,uint256,uint256,uint256)", addr).split("\n")[0]) / 1e6;
 
 // 1. Fresh setup, wallet, deposit.
 const A = newWalletHome(3);
@@ -79,7 +80,7 @@ check("telegraph_account: address, network, escrow, limits", acct.json?.escrow?.
 const q1 = ask("Lahore");
 const a1 = await call(c, "telegraph_ask_miner", q1);
 check("paid ask returns an answer", !a1.isError && a1.json?.answer !== undefined, a1.isError ? a1.text.slice(0, 160) : `miner ${a1.json?.miner}`);
-check("paid from escrow with a receipt", a1.json?.payment?.rail === "escrow" && !!a1.json?.payment?.receipt, `price $${a1.json?.payment?.price_usd}`);
+check("paid from escrow with a receipt", a1.json?.payment?.rail === "escrow" && !!a1.json?.payment?.receipt, `billed $${a1.json?.payment?.billed_usd}`);
 
 // 4. A retry of the same ask is not paid again.
 const a1b = await call(c, "telegraph_ask_miner", q1);
@@ -134,11 +135,11 @@ await c.close();
 const typo = cli(A.home, ["fund", "abc"]);
 check("a mistyped amount is refused with a message", typo.status === 1 && /not an amount/i.test(typo.stdout), typo.stdout.trim().slice(0, 80));
 
-// 12. Taking money back out: request it, then it waits for the unlock.
+// 12. Taking money back out: request it, then it waits for a ledger root that covers it.
 const req = cli(A.home, ["withdraw", "1", "--yes"]);
-check("withdraw requests the amount and says when it unlocks", req.status === 0 && /Requested\./.test(req.stdout) && /unlocks/.test(req.stdout), req.stdout.trim().split("\n").pop()?.slice(0, 110));
+check("withdraw requests the amount and says when it can be collected", req.status === 0 && /Requested\./.test(req.stdout) && /collected/.test(req.stdout), req.stdout.trim().split("\n").pop()?.slice(0, 110));
 const pend = Number(JSON.parse(cli(A.home, ["status"]).stdout).escrow.pending_withdrawal_usdc);
-check("the request is pending on chain and locked until blocks settle", pend === 1 && /already requested/.test(cli(A.home, ["withdraw", "--yes"]).stdout), `pending ${pend} USDC`);
+check("the request is pending and waits for a ledger root", pend === 1 && /already requested/.test(cli(A.home, ["withdraw", "--yes"]).stdout), `pending ${pend} USDC`);
 
 const failed = results.filter((r) => !r.pass).length;
 console.log(`\n${results.length - failed} passed, ${failed} failed`);

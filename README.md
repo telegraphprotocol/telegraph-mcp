@@ -19,7 +19,7 @@ It checks the network and creates a wallet just for Telegraph. You can import a 
 **3. Ask it something:** "What is the BTC price? Use Telegraph." Every ask after that is paid from escrow on its own.
 
 Top up any time with `npx -y @telegraphprotocol/telegraph-protocol-mcp fund`. Check balances with `... status`.
-Take USDC back out with `... withdraw`: it requests the amount, and you run it again to collect once the network has settled it.
+Take USDC back out with `... withdraw`: it requests the amount, and you run it again to collect once a ledger root covers the request.
 
 Back up `~/.telegraph/wallet.json`. It is the only copy of the key, and the escrow balance goes with it.
 
@@ -37,13 +37,14 @@ No setting or key is needed: the server uses the wallet from setup. `setup` and 
 ## How paying works
 
 - **The MCP server is your wallet.** It runs on your machine, loads the key from `~/.telegraph/wallet.json` (or `TELEGRAPH_PRIVATE_KEY`), and calls the node's `/engine/v1/ask` itself. When the node asks for payment, the server signs the escrow authorization with that key and sends the ask again. The agent never sees the key or the signature.
-- **Escrow, always, by default.** You deposit USDC once. The escrow signature proves you asked, but it can't move funds. Asks are deducted at the epoch close, and **a failed ask is never billed**.
+- **Escrow, always, by default.** You deposit USDC once. The escrow signature proves you asked, but it can't move funds. Asks are charged in the epoch's ledger root, and **a failed ask is never billed**.
+- **Multi-miner asks.** `telegraph_ask` sends `max_budget_usdc` (default 260000 μUSDC, $0.26, the most the testnet node takes). When the first miner's answer misses part of the question, the node asks the next ranked miners for the rest within that budget. Escrow holds the budget while the ask runs; only the miners whose answers are used are billed, and the rest is released. The reply's `fulfillment` says whether the answer is complete, who gave each field, and the payments.
 - **When escrow runs low,** the ask is refused with a message saying how much is left and how to top up. Nothing is charged, and the wallet is never paid from silently.
 - **No double charges.** Repeating the same ask within a minute, or while it's still running, returns that answer, not a second charge.
 - **Limits.** The server won't pay more than $0.50 for one ask or $5 a day. Change them with the settings below.
 - **x402** (paying each ask straight from the wallet's USDC) is still there, but only if you turn it on: `TELEGRAPH_PAYMENT=auto` for escrow then x402, or `x402` for x402 only.
 
-Details, debt and withdrawing: [guides/2-payments.md](guides/2-payments.md).
+Details and withdrawing: [guides/2-payments.md](guides/2-payments.md).
 
 ## Settings
 
@@ -54,13 +55,14 @@ All optional.
 | `TELEGRAPH_PAYMENT` | `escrow` | `escrow`; `auto` (escrow, then x402); `x402` |
 | `TELEGRAPH_MAX_ASK_USD` | `0.5` | The most one ask may cost. `0` means no limit |
 | `TELEGRAPH_DAILY_LIMIT_USD` | `5` | The most all asks may cost in a UTC day. `0` means no limit |
+| `TELEGRAPH_MAX_BUDGET_USDC` | `260000` | `max_budget_usdc` for each `telegraph_ask`, in μUSDC, the first call included (never above `TELEGRAPH_MAX_ASK_USD`). `0` sends none: one miner, nothing recovered |
 | `TELEGRAPH_HOME` | `~/.telegraph` | Where the wallet and the day's spending are kept |
 | `TELEGRAPH_PRIVATE_KEY` | none | Use this key instead of the wallet file. For servers and CI. (`TELEGRAPH_EVM_PRIVATE_KEY`, the v1 name, also works.) |
 | `TELEGRAPH_API_KEY` | none | An Anjoman API key (`anjoman_…`). Switches to [key mode](#using-an-api-key-instead-of-a-wallet): no wallet is used |
 | `TELEGRAPH_API_URL` | `https://backend.telegraphprotocol.com` | Where the API key is used |
 | `TELEGRAPH_ALLOW_AGENT_DEPOSIT` | off | Also give the agent a `telegraph_deposit` tool |
-| `TELEGRAPH_URL` | `https://devnode.telegraphprotocol.com` | The node (Telegraph beta 2) |
-| `TELEGRAPH_RPC_URL`, `TELEGRAPH_DIAMOND`, `TELEGRAPH_CHAIN_ID` | beta 2's | The chain and the contract that holds escrow |
+| `TELEGRAPH_URL` | `https://devnode.telegraphprotocol.com` | The node (the Telegraph testnet) |
+| `TELEGRAPH_RPC_URL`, `TELEGRAPH_DIAMOND`, `TELEGRAPH_CHAIN_ID` | the testnet's (diamond `0x72a70e949362670Bf8bceAd24eFC5b8f950aa08b`) | The chain and the contract that holds escrow |
 
 ## Using an API key instead of a wallet
 
@@ -84,7 +86,7 @@ Treat the key like a password: it can spend your balance. Keep it in an agent's 
 
 | Tool | Cost | What it does |
 |---|---|---|
-| `telegraph_ask` | ~$0.01 | Ask a question, optionally with an exact intent and params. The node routes it to the top live miner |
+| `telegraph_ask` | ~$0.01 per miner used | Ask a question, optionally with an exact intent and params. The node routes it to the top live miner, and asks the next ones for what it missed |
 | `telegraph_ask_miner` | the miner's price | Ask one miner you choose, or call one of its endpoints directly |
 | `telegraph_find_intents` | free | Search the 130+ intents (kinds of question) |
 | `telegraph_intent` | free | One intent's kind, params, answer fields and top miners |
@@ -94,9 +96,9 @@ Treat the key like a password: it can spend your balance. Keep it in an agent's 
 | `telegraph_docs` | free | Built-in guides, also served as MCP resources (`telegraph://docs/...`) |
 | `telegraph_deposit` | gas | Only with `TELEGRAPH_ALLOW_AGENT_DEPOSIT`: move wallet USDC into escrow |
 
-## Test funds (beta 2)
+## Test funds (testnet)
 
-Beta 2 runs on Ethereum Sepolia, so there's no real money. Its USDC (`0xcc194e1a843B658526D0D5C431f670028582Ae17`) is Telegraph's own test token, not Circle's: the escrow takes that one and no other, and `telegraph_account` names it. Claim it at [anjoman.ai/dashboard/faucet](https://anjoman.ai/dashboard/faucet): sign in, send it to your Telegraph wallet, 1 USDC per account every 24 hours. `fund` points you there. Gas needs a little Sepolia ETH from a public faucet.
+The testnet runs on Ethereum Sepolia, so there's no real money. Its USDC is Circle's Sepolia USDC (`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`), and `telegraph_account` names it. Get it from [Circle's faucet](https://faucet.circle.com) (choose Ethereum Sepolia) and send it to your Telegraph wallet. `fund` points you there. Gas needs a little Sepolia ETH from a public faucet. Balances in the previous diamond (`0x3624…b99b`) do not carry over.
 
 ## Security
 

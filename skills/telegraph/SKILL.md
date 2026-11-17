@@ -22,7 +22,7 @@ Telegraph is a network of miners (APIs and models run by different people) that 
 
 | Tool | Cost | Use it to |
 |---|---|---|
-| `telegraph_ask` | ~$0.01 | Ask a question. Optional `intent` and `params` make it exact |
+| `telegraph_ask` | ~$0.01 per miner used | Ask a question. Optional `intent` and `params` make it exact |
 | `telegraph_ask_miner` | that miner's price | Ask one miner the user chose, or call one of its endpoints directly |
 | `telegraph_find_intents` | free | Find the intent for a kind of question |
 | `telegraph_intent` | free | See an intent's kind, params, answer fields and top miners |
@@ -37,11 +37,12 @@ Telegraph is a network of miners (APIs and models run by different people) that 
 - **To be exact**, find the intent and its params first, then ask with them:
   `telegraph_find_intents(search="weather")` → `telegraph_intent(intent="WEATHER_CHECK_TEMPERATURE")` → `telegraph_ask(intent="WEATHER_CHECK_TEMPERATURE", params={"location": "Lahore"})`.
 - The answer comes back in the intent's fields (`answer`), with the miner that answered and the payment receipt. Tell the user which miner answered.
+- When the first answer misses part of the question, the node asks the next ranked miners for the rest within the ask's budget. `fulfillment` says whether the answer is complete (`status`), which miner gave each field (`provenance`) and what was paid (`payments`).
 - An intent with no ranking yet is answered by one of the miners that declare it. `telegraph_intent` says when that is the case.
 
 ## Payments
 
-- **Escrow first**: if the wallet has a Telegraph escrow balance, each ask is signed against it and deducted at the epoch close. A failed ask is never billed.
+- **Escrow first**: if the wallet has a Telegraph escrow balance, each ask is signed against it and charged at the epoch close. An ask holds its budget while it runs and is billed only for the miners whose answers it used. A failed ask is never billed.
 - When escrow is low, the ask is refused with the balances; nothing is paid from the wallet. Tell the user to run `npx -y @telegraphprotocol/telegraph-protocol-mcp fund` in a terminal.
 - `telegraph_account` shows the balances, limits and how to top up. Never ask the user for a private key.
 - The private key stays in the MCP server's process. It never appears in tool inputs, outputs or model context.
