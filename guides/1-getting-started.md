@@ -22,9 +22,9 @@ Optional settings:
 
 ## The network today
 
-The testnet runs on Ethereum Sepolia, a test network, so it costs no real money. Its USDC is Circle's Sepolia USDC at `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`, and `telegraph_account` names it.
+The testnet runs on Ethereum Sepolia, a test network, so it costs no real money. Its USDC is Telegraph's own test token at `0xcc194e1a843B658526D0D5C431f670028582Ae17`, not Circle's: escrow takes that one and no other, and `telegraph_account` names it.
 
-Get it from Circle's faucet at <https://faucet.circle.com> (choose Ethereum Sepolia) and send it to your Telegraph wallet. The `fund` command points you there. Transactions need a little Sepolia ETH for gas, which public Sepolia faucets give out. Balances in the previous diamond do not carry over.
+Claim it at <https://anjoman.ai/dashboard/faucet> (sign in) and send it to your Telegraph wallet, or mint it directly (`mint(address,uint256)`, anyone can). The `fund` command points you there. Transactions need a little Sepolia ETH for gas, which public Sepolia faucets give out. Balances in the previous diamond do not carry over.
 
 ## First steps
 

@@ -98,7 +98,7 @@ Treat the key like a password: it can spend your balance. Keep it in an agent's 
 
 ## Test funds (testnet)
 
-The testnet runs on Ethereum Sepolia, so there's no real money. Its USDC is Circle's Sepolia USDC (`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`), and `telegraph_account` names it. Get it from [Circle's faucet](https://faucet.circle.com) (choose Ethereum Sepolia) and send it to your Telegraph wallet. `fund` points you there. Gas needs a little Sepolia ETH from a public faucet. Balances in the previous diamond (`0x3624…b99b`) do not carry over.
+The testnet runs on Ethereum Sepolia, so there's no real money. Its USDC (`0xcc194e1a843B658526D0D5C431f670028582Ae17`) is Telegraph's own test token, not Circle's: the escrow takes that one and no other, and `telegraph_account` names it. Claim it at [anjoman.ai/dashboard/faucet](https://anjoman.ai/dashboard/faucet) (sign in) and send it to your Telegraph wallet, or mint it directly (`mint(address,uint256)`, anyone can). `fund` points you there. Gas needs a little Sepolia ETH from a public faucet. Balances in the previous diamond (`0x3624…b99b`) do not carry over.
 
 ## Security
 
