@@ -14,7 +14,7 @@ import { RUN, SERVER } from "./tools.js";
 // agent app. Every on-chain step asks first. The MCP server never prompts and
 // never handles setup.
 
-const FAUCET = "https://faucet.circle.com"; // Circle's test USDC, which the testnet diamond takes
+const FAUCET = "https://anjoman.ai/dashboard/faucet"; // where the testnet's test USDC comes from
 const GUIDE = "https://anjoman.ai/docs/using/mcp-server"; // setup for every other app
 
 const HELP = `Telegraph MCP server
@@ -113,7 +113,7 @@ async function fund(io: Io, cfg: Config, amount?: number): Promise<number> {
   io.say(`\nWallet ${a.address} on ${a.network}`);
   io.say(`  holds  ${a.wallet_usdc} USDC and ${a.wallet_eth} ETH for gas`);
   io.say(`  escrow ${a.escrow.spendable_usdc} USDC spendable`);
-  io.say(`  USDC   ${a.usdc_token}${testnet ? " (Circle's Sepolia test USDC)" : ""}`);
+  io.say(`  USDC   ${a.usdc_token}${testnet ? " (the testnet's test token, not Circle's)" : ""}`);
   io.say("  An ask costs about $0.01 for each miner whose answer it uses.");
   if (cfg.maxBudgetUsdc > 0) {
     io.say(`  While it runs it holds its budget ($${cfg.maxBudgetUsdc / 1e6}, TELEGRAPH_MAX_BUDGET_USDC): keep that much in escrow.`);
@@ -131,7 +131,7 @@ async function fund(io: Io, cfg: Config, amount?: number): Promise<number> {
   if (a.wallet_usdc < want) {
     io.say(
       `\nThe wallet holds ${a.wallet_usdc} USDC. Send at least ${want} USDC on ${a.network} to ${a.address}` +
-        `${testnet ? `: get it at ${FAUCET} (choose Ethereum Sepolia)` : ""}, then run \`${RUN} fund\`.`,
+        `${testnet ? `: claim it at ${FAUCET} (sign in), or mint it (anyone can)` : ""}, then run \`${RUN} fund\`.`,
     );
     return 1;
   }
