@@ -14,7 +14,7 @@ import { RUN, SERVER } from "./tools.js";
 // agent app. Every on-chain step asks first. The MCP server never prompts and
 // never handles setup.
 
-const FAUCET = "https://anjoman.ai/dashboard/faucet"; // where beta 2's test USDC comes from
+const FAUCET = "https://faucet.circle.com"; // Circle's test USDC, which the testnet diamond takes
 const GUIDE = "https://anjoman.ai/docs/using/mcp-server"; // setup for every other app
 
 const HELP = `Telegraph MCP server
@@ -65,7 +65,7 @@ export async function runCli(argv: string[]): Promise<number> {
 async function setup(io: Io, client?: string): Promise<number> {
   let cfg = loadConfig();
   const testnet = cfg.chainId === 11155111;
-  io.say(`Telegraph setup\n\nNetwork: chain ${cfg.chainId}${testnet ? " (Ethereum Sepolia, beta 2: test USDC, no real money)" : ""}`);
+  io.say(`Telegraph setup\n\nNetwork: chain ${cfg.chainId}${testnet ? " (Ethereum Sepolia, the testnet: test USDC, no real money)" : ""}`);
   const intents = await getJson(`${cfg.url}/engine/v1/intents`, 20_000).then((d) => d.intents?.length ?? 0);
   io.say(`Node:    ${cfg.url} (reachable, ${intents} intents)`);
 
@@ -112,9 +112,12 @@ async function fund(io: Io, cfg: Config, amount?: number): Promise<number> {
   const testnet = cfg.chainId === 11155111;
   io.say(`\nWallet ${a.address} on ${a.network}`);
   io.say(`  holds  ${a.wallet_usdc} USDC and ${a.wallet_eth} ETH for gas`);
-  io.say(`  escrow ${a.escrow.spendable_usdc} USDC spendable${a.escrow.debt_usdc ? `, ${a.escrow.debt_usdc} USDC debt` : ""}`);
-  io.say(`  USDC   ${a.usdc_token}${testnet ? " (beta 2's test token, not Circle's)" : ""}`);
-  io.say("  An ask costs about $0.01, so $1 covers about 100 of them.");
+  io.say(`  escrow ${a.escrow.spendable_usdc} USDC spendable`);
+  io.say(`  USDC   ${a.usdc_token}${testnet ? " (Circle's Sepolia test USDC)" : ""}`);
+  io.say("  An ask costs about $0.01 for each miner whose answer it uses.");
+  if (cfg.maxBudgetUsdc > 0) {
+    io.say(`  While it runs it holds its budget ($${cfg.maxBudgetUsdc / 1e6}, TELEGRAPH_MAX_BUDGET_USDC): keep that much in escrow.`);
+  }
 
   const want = amount ?? Number((await io.ask("How much USDC to move into escrow? [1]: ")) || 1);
   if (!(want > 0)) {
@@ -128,7 +131,7 @@ async function fund(io: Io, cfg: Config, amount?: number): Promise<number> {
   if (a.wallet_usdc < want) {
     io.say(
       `\nThe wallet holds ${a.wallet_usdc} USDC. Send at least ${want} USDC on ${a.network} to ${a.address}` +
-        `${testnet ? `: claim it at ${FAUCET} (sign in, 1 USDC per account every 24 hours)` : ""}, then run \`${RUN} fund\`.`,
+        `${testnet ? `: get it at ${FAUCET} (choose Ethereum Sepolia)` : ""}, then run \`${RUN} fund\`.`,
     );
     return 1;
   }
@@ -147,18 +150,21 @@ async function withdraw(io: Io, cfg: Config, amount?: number): Promise<number> {
   const a = await chain.account(account.address);
 
   if (a.escrow.pending_withdrawal_usdc > 0) {
-    const u = await chain.withdrawalUnlock(account.address);
-    if (!u.unlocked) {
-      io.say(`\n${a.escrow.pending_withdrawal_usdc} USDC is already requested. It unlocks once the network settles block ${u.unlockSequence}, or at ${u.unlockAt.toISOString()} at the latest. Run \`${RUN} withdraw\` again then.`);
+    const w = await chain.withdrawal(account.address);
+    if (w.status !== "ready" && w.status !== "fallback_open") {
+      io.say(
+        `\n${w.amount_usdc} USDC is already requested. It can be collected once a ledger root that covers the request ` +
+          `is active${w.fallback_at ? `, or from ${w.fallback_at} at the latest` : ""}. Run \`${RUN} withdraw\` again then.`,
+      );
       return 1;
     }
-    if (!(await io.confirm(`\nSend the requested ${a.escrow.pending_withdrawal_usdc} USDC to ${a.address}?`, true))) return 1;
+    if (!(await io.confirm(`\nSend the requested ${w.amount_usdc} USDC to ${a.address}?`, true))) return 1;
     const done = await chain.executeWithdraw(account);
     io.say(`Withdrawn. Wallet now ${done.wallet_usdc} USDC; escrow ${done.escrow_now.spendable_usdc} USDC spendable. Transaction: ${done.transaction}`);
     return 0;
   }
 
-  io.say(`\nEscrow ${a.escrow.spendable_usdc} USDC spendable${a.escrow.debt_usdc ? `, ${a.escrow.debt_usdc} USDC owed for asks already served` : ""}`);
+  io.say(`\nEscrow ${a.escrow.spendable_usdc} USDC spendable${a.escrow.unbilled_usdc ? ` (${a.escrow.unbilled_usdc} USDC of asks served is still to be charged)` : ""}`);
   if (!(a.escrow.spendable_usdc > 0)) {
     io.say("There is nothing to take out.");
     return 1;
@@ -172,10 +178,13 @@ async function withdraw(io: Io, cfg: Config, amount?: number): Promise<number> {
     io.say(`Only ${a.escrow.spendable_usdc} USDC is spendable.`);
     return 1;
   }
-  io.say("The amount stops paying for asks straight away, and what is already owed is still settled from it before it is paid out.");
+  io.say("The amount stops paying for asks straight away. It is paid out against a ledger root, so asks already served are charged first.");
   if (!(await io.confirm(`Request ${want} USDC out of escrow?`, false))) return 1;
   const r = await chain.requestWithdraw(account, want);
-  io.say(`Requested. It unlocks once the network settles block ${r.unlock.unlockSequence}, or at ${r.unlock.unlockAt.toISOString()} at the latest. Run \`${RUN} withdraw\` then to collect it.`);
+  io.say(
+    `Requested. It can be collected once a ledger root ${r.needs_root_after ? `built after ${r.needs_root_after}` : "that covers it"} is active` +
+      `${r.fallback_at ? `, or from ${r.fallback_at} at the latest` : ""}. Run \`${RUN} withdraw\` then to collect it.`,
+  );
   return 0;
 }
 

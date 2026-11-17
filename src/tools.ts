@@ -69,7 +69,7 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
       .optional()
       .describe('Optional params for the intent, as telegraph_intent lists them, e.g. {"location": "Lahore"}. Needs intent.'),
   };
-  const askBody = (a: { question?: string; intent?: string; params?: Record<string, unknown> }) => {
+  const askBody = (a: AskArgs) => {
     if (a.params && !a.intent) throw new Error("params need an intent.");
     if (!a.question && !a.params) throw new Error("Give a question, or an intent with params.");
     return {
@@ -92,8 +92,11 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
           "question); an empty balance is refused with a message and nothing is charged. A question can take up to a minute."
         : "Ask the Telegraph network a question: live prices, FX, weather, web and academic search, security, code " +
           "review, compliance and 100+ other intents. The node routes it to the best-ranked live miner and returns " +
-          "its answer in the intent's fields. Costs about $0.01, paid automatically from the Telegraph escrow balance " +
-          "(a failed ask is never billed; repeating the same ask within a minute is not paid twice).",
+          "its answer in the intent's fields. When that answer misses part of the question, the next ranked miners " +
+          "are asked for the rest, within a budget (TELEGRAPH_MAX_BUDGET_USDC). Each miner whose answer is used " +
+          "costs its price, about $0.01, paid automatically from the Telegraph escrow balance (a failed ask is never " +
+          "billed; repeating the same ask within a minute is not paid twice). fulfillment says whether the answer " +
+          "is complete, which miner gave each field, and the payments.",
       inputSchema: askShape,
       annotations: paid,
     },
@@ -104,7 +107,7 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
         const intent = a.intent ? name(a.intent) : undefined;
         return keyAnswer(await api.ask({ message: a.question || `Ask ${intent}`, intent, params: a.params }));
       }
-      return payer ? answer(await payer.post("/engine/v1/ask", askBody(a))) : fail(NO_KEY);
+      return payer ? answer(await payer.post("/engine/v1/ask", routedAskBody(cfg, askBody(a)))) : fail(NO_KEY);
     }),
   );
 
@@ -287,8 +290,8 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
       title: "Account",
       description:
         "This server's wallet (or any address): its address and network, wallet USDC and ETH, the Telegraph escrow " +
-        "balance that pays for asks (spendable, deposited, debt, pending withdrawal), the spending limits, and how " +
-        "to top up. Free.",
+        "balance that pays for asks (spendable, deposited, not yet charged, pending withdrawal), the spending limits, " +
+        "and how to top up. Free.",
       inputSchema: { address: z.string().optional().describe("Address to look up. Default: this server's wallet.") },
       annotations: free,
     },
@@ -302,7 +305,10 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
       return ok({
         ...acct,
         payment_mode: cfg.payment,
-        limits: { max_per_ask_usd: cfg.maxAskUsd, daily_usd: cfg.dailyLimitUsd, spent_today_usd: payer.spent.today() },
+        limits: {
+          max_per_ask_usd: cfg.maxAskUsd, daily_usd: cfg.dailyLimitUsd, spent_today_usd: payer.spent.today(),
+          ask_budget_usd: (routedAskBody(cfg, {}).max_budget_usdc ?? 0) / 1e6 || undefined,
+        },
         top_up: `Asks are paid from escrow automatically. To add more, the user runs \`${RUN} fund\` in a terminal and confirms the amount.`,
       });
     }),
@@ -358,6 +364,18 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
   return payer;
 }
 
+type AskArgs = { question?: string; intent?: string; params?: Record<string, unknown> };
+
+// A routed ask is a budgeted multi-miner ask: max_budget_usdc (μUSDC, the first
+// call included) lets the node ask the next ranked miners for what the first
+// answer misses. Capped by TELEGRAPH_MAX_ASK_USD; 0, or less than one call
+// ($0.01, the floor price), sends none (one miner).
+export function routedAskBody<T extends object>(cfg: Pick<Config, "maxBudgetUsdc" | "maxAskUsd">, body: T): T & { max_budget_usdc?: number } {
+  const cap = cfg.maxAskUsd > 0 ? Math.round(cfg.maxAskUsd * 1e6) : Infinity;
+  const budget = Math.min(cfg.maxBudgetUsdc, cap);
+  return budget >= 10_000 ? { ...body, max_budget_usdc: budget } : body;
+}
+
 function rankingRows(board: any, intent: string) {
   return ((board?.intents?.[intent] as any[]) || []).map((r) => ({
     rank: r.rank, miner: r.miner_slug, score: round(r.score), status: r.activation_status,
@@ -383,7 +401,8 @@ function answer(r: PaidResponse, oneMiner = false): Text {
   const payment = r.rail
     ? {
         rail: r.rail,
-        price_usd: r.priceUsd,
+        billed_usd: r.billedUsd,
+        authorized_usd: r.priceUsd,
         receipt: r.receipt,
         ...(r.escrowRefused ? { escrow: r.escrowRefused } : {}),
         ...(r.repeated ? { repeated: "Same ask as a moment ago: this is that answer, not paid again." } : {}),
@@ -396,6 +415,7 @@ function answer(r: PaidResponse, oneMiner = false): Text {
       miner: b.miner_name ? `${b.miner_name} (id ${b.miner_id})` : b.miner_id,
       result_shape: b.result_shape,
       field_status: b.field_status,
+      fulfillment: b.fulfillment,
       cost_usd: b.cost_usd,
       payment,
       warnings: b.warnings,
@@ -416,15 +436,19 @@ function hintFor(status: number, b: any, oneMiner: boolean): string | undefined 
   if (err === "no_compatible_miner") return "No live miner serves that intent now. Ask without intent, or pick another (telegraph_find_intents).";
   if (err === "invalid_params") return "The params don't fit the intent. telegraph_intent lists the params it takes.";
   if (err === "no_input_schema") return "This intent takes no params. Send only a question.";
+  if (/max_budget_usdc/.test(String(b?.message || ""))) {
+    return "The node refused the ask's budget; nothing was charged. Set TELEGRAPH_MAX_BUDGET_USDC within the range the node names, or 0 to ask one miner.";
+  }
   if (status === 429) return "Too many new questions this minute. Wait a minute, then retry.";
   if (status === 402) {
     // The node refuses for more than a short balance: an agent over its charge
-    // limit, or one whose deliveries are suspended until its debt is repaid.
-    // Pass its own words through instead of guessing which it was.
+    // limit for the block, for example. Pass its own words through instead of
+    // guessing which it was.
     const why = String(b?.reason || b?.error || "").trim();
     return (
-      `Payment from escrow refused${why ? ` (the node says: ${why})` : ""}, and nothing was charged. telegraph_account ` +
-      `shows the balance and anything owed; the user fixes it by running \`${RUN} fund\` in a terminal and confirming the amount.`
+      `Payment from escrow refused${why ? ` (the node says: ${why})` : ""}, and nothing was charged. ` +
+      (oneMiner ? "" : "An ask holds its whole budget (TELEGRAPH_MAX_BUDGET_USDC) while it runs. ") +
+      `telegraph_account shows the balance; the user fixes it by running \`${RUN} fund\` in a terminal and confirming the amount.`
     );
   }
   if (status === 503) return "The node could not route this now. Nothing was charged; try again shortly.";

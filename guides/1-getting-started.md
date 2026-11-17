@@ -14,16 +14,17 @@ It creates (or imports) a wallet just for Telegraph, funds its escrow after they
 
 Optional settings:
 
-- `TELEGRAPH_URL`: the node to use. Default: Telegraph beta 2, `https://devnode.telegraphprotocol.com`.
+- `TELEGRAPH_URL`: the node to use. Default: the Telegraph testnet, `https://devnode.telegraphprotocol.com`.
 - `TELEGRAPH_PAYMENT`: `escrow` (default), `auto` (escrow, then x402) or `x402`.
 - `TELEGRAPH_MAX_ASK_USD`, `TELEGRAPH_DAILY_LIMIT_USD`: spending limits (default $0.50 per ask, $5 a day).
-- `TELEGRAPH_RPC_URL`, `TELEGRAPH_DIAMOND`, `TELEGRAPH_CHAIN_ID`: the chain behind the node. The defaults match beta 2.
+- `TELEGRAPH_MAX_BUDGET_USDC`: the `max_budget_usdc` each `telegraph_ask` sends, in μUSDC (default 260000, $0.26). `0` asks one miner only.
+- `TELEGRAPH_RPC_URL`, `TELEGRAPH_DIAMOND`, `TELEGRAPH_CHAIN_ID`: the chain behind the node. The defaults match the testnet (diamond `0x72a70e949362670Bf8bceAd24eFC5b8f950aa08b`).
 
 ## The network today
 
-Beta 2 runs on Ethereum Sepolia, a test network, so it costs no real money. Its USDC is Telegraph's own test token at `0xcc194e1a843B658526D0D5C431f670028582Ae17`, not Circle's: escrow takes that one and no other, and `telegraph_account` names it.
+The testnet runs on Ethereum Sepolia, a test network, so it costs no real money. Its USDC is Circle's Sepolia USDC at `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`, and `telegraph_account` names it.
 
-Get it from the faucet at <https://anjoman.ai/dashboard/faucet>: sign in, send it to your Telegraph wallet, 1 USDC per account every 24 hours. The `fund` command points you there. Transactions need a little Sepolia ETH for gas, which public Sepolia faucets give out.
+Get it from Circle's faucet at <https://faucet.circle.com> (choose Ethereum Sepolia) and send it to your Telegraph wallet. The `fund` command points you there. Transactions need a little Sepolia ETH for gas, which public Sepolia faucets give out. Balances in the previous diamond do not carry over.
 
 ## First steps
 
@@ -34,7 +35,7 @@ Get it from the faucet at <https://anjoman.ai/dashboard/faucet>: sign in, send i
 
 ## Tools
 
-- `telegraph_ask`: ask a question; the node picks the miner. Paid.
+- `telegraph_ask`: ask a question; the node picks the miner, and asks the next ranked miners for what its answer missed. Paid.
 - `telegraph_ask_miner`: ask one miner you choose. Paid.
 - `telegraph_find_intents`, `telegraph_intent`: what can be asked, and how. Free.
 - `telegraph_find_miners`, `telegraph_ranking`: who answers, and how well they rank. Free.
