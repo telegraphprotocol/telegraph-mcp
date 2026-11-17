@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "telegraph",
   "display_name": "Telegraph",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Ask Telegraph's ranked miners for prices, FX, weather, search and specialist answers, paid from your Anjoman account through an API key.",
   "author": {
     "name": "Telegraph Protocol",
@@ -30,7 +30,7 @@
     "api_key": {
       "type": "string",
       "title": "Anjoman API key",
-      "description": "Starts with tgk_. Create one at https://anjoman.ai/dashboard/api-keys. Questions are paid from your Anjoman balance.",
+      "description": "Starts with anjoman_. Create one at https://anjoman.ai/dashboard/api-keys. Questions are paid from your Anjoman balance.",
       "sensitive": true,
       "required": true
     }

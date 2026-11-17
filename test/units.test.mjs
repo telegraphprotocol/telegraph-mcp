@@ -119,7 +119,7 @@ test("answers past the dedupe window are dropped, not kept for ever", async () =
   assert.equal(d.size, 1, "only the live answer is held");
 });
 
-const KEY = "tgk_" + "a".repeat(43);
+const KEY = "anjoman_" + "a".repeat(43);
 
 test("an API key switches to key mode, is checked, and points at the Anjoman API by default", () => {
   const c = loadConfig({ TELEGRAPH_HOME: home(), TELEGRAPH_API_KEY: ` ${KEY} ` });
@@ -127,7 +127,8 @@ test("an API key switches to key mode, is checked, and points at the Anjoman API
   assert.equal(c.apiUrl, "https://backend.telegraphprotocol.com");
   assert.equal(loadConfig({ TELEGRAPH_HOME: home(), TELEGRAPH_API_KEY: KEY, TELEGRAPH_API_URL: "http://localhost:4100/" }).apiUrl, "http://localhost:4100");
   assert.equal(loadConfig({ TELEGRAPH_HOME: home() }).apiKey, undefined, "wallet mode without one");
-  assert.throws(() => loadConfig({ TELEGRAPH_HOME: home(), TELEGRAPH_API_KEY: "0x" + "1".repeat(64) }), /starts with tgk_/);
+  assert.throws(() => loadConfig({ TELEGRAPH_HOME: home(), TELEGRAPH_API_KEY: "0x" + "1".repeat(64) }), /starts with anjoman_/);
+  assert.equal(loadConfig({ TELEGRAPH_HOME: home(), TELEGRAPH_API_KEY: "tgk_" + "a".repeat(43) }).apiKey, "tgk_" + "a".repeat(43), "keys made before the prefix changed still work");
 });
 
 // A stand-in for the Anjoman API: replies in order, and records what it was asked.
