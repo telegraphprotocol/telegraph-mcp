@@ -3,7 +3,7 @@
   "name": "telegraph",
   "display_name": "Telegraph",
   "version": "2.1.0",
-  "description": "Ask Telegraph's ranked miners for prices, FX, weather, search and specialist answers, paid from your Telegraph escrow.",
+  "description": "Ask Telegraph's ranked miners for prices, FX, weather, search and specialist answers, paid from your Anjoman account through an API key.",
   "author": {
     "name": "Telegraph Protocol",
     "url": "https://telegraphprotocol.com"
@@ -20,7 +20,19 @@
     "entry_point": "dist/index.js",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/dist/index.js"]
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "TELEGRAPH_API_KEY": "${user_config.api_key}"
+      }
+    }
+  },
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "Anjoman API key",
+      "description": "Starts with tgk_. Create one at https://anjoman.ai/dashboard/api-keys. Questions are paid from your Anjoman balance.",
+      "sensitive": true,
+      "required": true
     }
   },
   "tools_generated": true,
