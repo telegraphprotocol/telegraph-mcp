@@ -1,5 +1,7 @@
 # Telegraph MCP server
 
+> **Just want your agent to use Anjoman for outside intelligence?** Install the [`anjoman` skill](skills/anjoman/SKILL.md) instead: `npx skills add telegraphprotocol/telegraph-mcp --skill anjoman`, then set `ANJOMAN_API_KEY`. No MCP server or wallet, and it supports follow-ups, a spend cap, progress, traces and receipts. This MCP server is for direct specialist access.
+
 Gives any MCP agent (Claude Desktop, Claude Code, Cursor, Continue, Goose, OpenClaw, LangChain, ElizaOS, ...) the Telegraph network, on your own computer. Ask a question and the best-ranked miner answers. Payment comes from your Telegraph escrow automatically: no keys, signatures or blockchain steps for you or your agent.
 
 ## Start in three steps
