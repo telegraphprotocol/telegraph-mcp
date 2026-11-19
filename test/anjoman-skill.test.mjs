@@ -262,7 +262,8 @@ test("the copy under .agents/skills is identical to skills/, so the two cannot d
 test("the always-on rule is marked so it can be found and removed, and the skill file is well formed", async () => {
   const r = await run(["rule"]);
   assert.match(r.stdout, /<!-- anjoman:start -->[\s\S]*<!-- anjoman:end -->/);
-  const skill = readFileSync(new URL("../skills/anjoman/SKILL.md", import.meta.url), "utf8");
+  // A Windows checkout may have CRLF line endings; the file in git is LF.
+  const skill = readFileSync(new URL("../skills/anjoman/SKILL.md", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const front = /^---\n([\s\S]*?)\n---/.exec(skill)?.[1] ?? "";
   assert.match(front, /^name: anjoman$/m);
   const description = /^description: (.+)$/m.exec(front)?.[1] ?? "";

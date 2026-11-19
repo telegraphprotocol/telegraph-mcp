@@ -54,7 +54,10 @@ If the connection drops or the request outlasts the wait, the script returns a j
 ## Setup (once)
 
 1. The user creates an API key at https://anjoman.ai/dashboard/api-keys and funds the account there.
-2. Set it as `ANJOMAN_API_KEY`, or run `node scripts/anjoman.mjs login` and enter it when asked. The key is stored in `~/.anjoman/key`, readable only by the user.
+2. Set it as `ANJOMAN_API_KEY`, or run `node scripts/anjoman.mjs login` and enter it when asked. The key is stored in `~/.anjoman/key`, readable only by the user, and every project and agent on the machine finds it.
+3. Check it with `node scripts/anjoman.mjs balance`: it should show the account's balance, not "No Anjoman API key".
+
+Tell the user to run `login` themselves in a normal terminal, not through you, so the key never passes through the chat. This skill's folder is where `scripts/anjoman.mjs` lives, for example `.claude/skills/anjoman/` in a project or `~/.claude/skills/anjoman/` for all projects; `npx skills list` shows where it is installed.
 
 Never ask the user to paste the key into the chat, never print it, and never put it in a file in the project or in a command line.
 
