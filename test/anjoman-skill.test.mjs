@@ -49,6 +49,11 @@ before(async () => {
           return res.end(JSON.stringify({ message: "Your balance is $0.00" }));
         }
         const head = [["conversation", { conversationId: CONV }], ["job", { jobId: JOB }], ["status", { stage: "classifying", message: "Planning the request" }], ["status", { stage: "asking_miner", message: "Asking TxLens", miner: "txlens" }]];
+        if (scenario === "discarded" || scenario === "no-record") {
+          // The turn failed: the stream ends without `done` or `error`, and (for "discarded") the job is gone with the conversation.
+          sse(res, head);
+          return res.end();
+        }
         if (scenario === "dropped") {
           // The connection ends after the job id, before any `done`.
           sse(res, head);
@@ -58,6 +63,14 @@ before(async () => {
         sse(res, [...head, ["trace", { steps }], ["done", { messageId: "m1", answer: scenario === "partial" ? "BTC is $97,000. Weather could not be read." : "BTC is $97,000.", status: scenario === "partial" ? "partial" : "complete", files: [], sources: [{ intent: "CRYPTO_PRICE_USD", question: "q", kind: "miner", miner: { slug: "txlens", name: "TxLens", rank: 2 }, receiptHash: "0xabc123" }], timings: { totalMs: 2000, byCategory: {} } }]]);
         return res.end();
       }
+      if (req.url === `/agent/jobs/${JOB}` && scenario === "answer-without-job") {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ message: "boom" }));
+      }
+      if (req.url === `/agent/jobs/${JOB}` && scenario === "discarded") {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ message: "Job not found." }));
+      }
       if (req.url === `/agent/jobs/${JOB}`) {
         res.writeHead(200, { "Content-Type": "application/json" });
         const state = scenario === "cap" ? { id: JOB, status: "waiting_authorization", outcome: "failed", reason: "spend_limit_reached", costUsd: 0.5 } : scenario === "dropped" ? { id: JOB, status: "completed", outcome: "complete", answer: "Finished while you were away.", costUsd: 0.02, conversationId: CONV } : { id: JOB, status: "completed", outcome: "complete", costUsd: 0.0123 };
@@ -66,6 +79,10 @@ before(async () => {
       if (req.url.startsWith("/engine/escrow/balance")) {
         res.writeHead(200, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ effectiveBalance: "4.25", escrowBalance: "5", agentDebt: "0" }));
+      }
+      if (req.url === "/agent/spend/limit") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ limitUsd: 0.5 }));
       }
       if (req.url.startsWith("/agent/spend")) {
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -85,7 +102,7 @@ const home = () => mkdtempSync(join(tmpdir(), "anjoman-skill-"));
 
 function run(args, env = {}, input) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [SCRIPT, ...args], { env: { ...process.env, ANJOMAN_API_URL: base, ANJOMAN_HOME: home(), ANJOMAN_API_KEY: "anjoman_test_key", ...env } });
+    const child = spawn(process.execPath, [SCRIPT, ...args], { env: { ...process.env, ANJOMAN_API_URL: base, ANJOMAN_HOME: home(), ANJOMAN_API_KEY: "anjoman_test_key", ANJOMAN_MAX_SPEND_USD: "", ...env } });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (c) => (stdout += c));
@@ -98,7 +115,7 @@ function run(args, env = {}, input) {
 
 const lastChat = () => seen.findLast((r) => r.url === "/agent/chat");
 
-test("asks Anjoman with the key and a default spend cap, and reports the answer, steps, receipt and cost", async () => {
+test("asks Anjoman with the key and no spend cap by default, and reports the answer, steps, receipt and cost", async () => {
   scenario = "complete";
   const r = await run(["ask", "What is the BTC price in USD?"]);
   assert.equal(r.code, 0);
@@ -112,7 +129,8 @@ test("asks Anjoman with the key and a default spend cap, and reports the answer,
   // Progress is on stderr so the answer stays clean on stdout.
   assert.match(r.stderr, /Planning the request/);
   assert.match(r.stderr, /Asking TxLens/);
-  assert.deepEqual(lastChat().body, { message: "What is the BTC price in USD?", maxSpendUsd: 0.5 });
+  // No spending cap unless the user sets one: the account's balance is the limit.
+  assert.deepEqual(lastChat().body, { message: "What is the BTC price in USD?" });
   assert.equal(lastChat().auth, "Bearer anjoman_test_key");
 });
 
@@ -144,6 +162,9 @@ test("a request that hit the spend cap exits 3 and tells the agent to ask the us
   assert.equal(r.code, 3);
   assert.match(r.stdout, /Status: STOPPED/);
   assert.match(r.stdout, /ask whether to continue/);
+  // A limit set in Anjoman is raised there, not from the command line.
+  assert.match(r.stdout, /can only be raised there/);
+  assert.match(r.stdout, /--max-spend can only lower it/);
 });
 
 test("a dropped connection is followed by its job instead of being lost", async () => {
@@ -153,6 +174,27 @@ test("a dropped connection is followed by its job instead of being lost", async 
   assert.match(r.stdout, /Finished while you were away\./);
   assert.match(r.stdout, /Cost: \$0\.02/);
   assert.match(r.stderr, /connection lost|following the job/);
+});
+
+test("a failed first message, whose job was discarded with its conversation, is reported plainly", async () => {
+  scenario = "discarded";
+  const r = await run(["ask", "x", "--wait", "1"]);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /ended the request without an answer and has no record of the job/);
+  assert.match(r.stderr, /nothing is charged/i);
+  assert.doesNotMatch(r.stderr, /404 from/);
+});
+
+test("an answer already received is kept even when the job's record cannot be read", async () => {
+  scenario = "complete";
+  // Same as "complete" but the job read fails: the answer must still be printed, with the cost unknown.
+  const before = seen.length;
+  scenario = "answer-without-job";
+  const r = await run(["ask", "x"]);
+  assert.equal(r.code, 0);
+  assert.match(r.stdout, /^BTC is \$97,000\./);
+  assert.match(r.stdout, /Cost: unknown/);
+  assert.ok(seen.length > before);
 });
 
 test("--json prints the whole result as one object", async () => {
@@ -203,6 +245,7 @@ test("login stores the key privately and later requests use it; the key is never
 test("balance shows what is spendable, and cancel and job reach the job endpoints", async () => {
   const b = await run(["balance"]);
   assert.match(b.stdout, /Spendable: \$4\.25/);
+  assert.match(b.stdout, /Spend limit per message: \$0\.50 \(set by the user in Anjoman\)/);
   scenario = "complete";
   const j = await run(["job", JOB]);
   assert.match(j.stdout, /State: completed/);

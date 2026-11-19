@@ -19,8 +19,15 @@ import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 
 const DEFAULT_URL = "https://backend.telegraphprotocol.com";
-/** What one request may spend unless told otherwise. The backend stops the job at this amount and asks for approval. */
-const DEFAULT_MAX_SPEND_USD = 0.5;
+/**
+ * The user sets their spending limit in Anjoman, on their account, and the backend applies it to every request from the
+ * account, whatever is sent here. This script adds no cap of its own unless --max-spend or ANJOMAN_MAX_SPEND_USD asks for
+ * a lower one for a session; with neither set, the account's limit (or, with none, its balance) is all that applies.
+ * When a cap applies, the backend stops the job at that amount and asks for approval. It holds back each call's quoted
+ * ceiling (about $0.26) from the cap while the call runs and gives back what the call did not cost, so a request that asks
+ * several specialists at once needs a cap with room for each, well above what such a request really costs.
+ */
+const DEFAULT_MAX_SPEND_USD = undefined;
 /** How long a request that outlives its connection is followed before handing back its job id. */
 const DEFAULT_WAIT_MINUTES = 15;
 const POLL_MS = 3_000;
@@ -255,7 +262,22 @@ async function ask(args) {
     // The job holds the cost and the final state. One that ended without its `done` event (a dropped connection, a long
     // job) is followed until it ends; one that just finished gets a few seconds to be closed out, so its cost is there.
     let job;
-    if (run.jobId) job = await followJob(run.jobId, run.done || run.error ? CLOSE_OUT_MS : waitMs, progress);
+    if (run.jobId) {
+      try {
+        job = await followJob(run.jobId, run.done || run.error ? CLOSE_OUT_MS : waitMs, progress);
+      } catch (err) {
+        // An answer already received is never thrown away because the job's record could not be read.
+        if (run.done) progress(`could not read the job's final state (${err instanceof Error ? err.message : String(err)})`);
+        else if (run.error) progress("could not read the job's final state");
+        else if (err instanceof Fail && /^404 /.test(err.message)) {
+          throw new Fail(
+            "Anjoman ended the request without an answer and has no record of the job. A first message that fails is discarded, and nothing is charged. Try the request again; if it keeps failing, tell the user.",
+          );
+        } else throw err;
+      }
+    } else if (!run.done && !run.error) {
+      throw new Fail("Anjoman closed the connection without an answer. Nothing is known to have been charged. Try the request again.");
+    }
     const result = summarise(run, job);
     print(result, flags.json);
     process.exitCode = result.status === "waiting_authorization" ? EXIT.needsApproval : result.failed ? EXIT.error : EXIT.ok;
@@ -352,7 +374,7 @@ function print(r, asJson) {
   const named = r.sources.map((s) => `${s.intent}${s.miner ? ` — ${s.miner.name || s.miner.slug}` : s.kind === "docs" ? " — Telegraph docs" : ""}${s.delivery && s.delivery !== "specialist" ? ` (${s.delivery.replace(/_/g, " ")})` : ""}${s.receiptHash ? ` [receipt ${s.receiptHash}]` : ""}`);
   if (named.length) out.push("Sources:", ...named.map((l) => `  ${l}`));
   if (r.files.length) out.push("Files made (download in the Anjoman app):", ...r.files.map((f) => `  ${f.name} (${f.size} bytes)`));
-  if (r.status === "waiting_authorization") out.push("", "Tell the user what it stopped at and ask whether to continue. If they agree, send the request again with a higher cap, e.g. --max-spend 2.");
+  if (r.status === "waiting_authorization") out.push("", "It stopped at a spending limit. Tell the user what it stopped at and ask whether to continue. A limit the user set in Anjoman can only be raised there (the spend limit button in the chat, at anjoman.ai); --max-spend can only lower it. Never raise or remove a limit yourself.");
   if (r.status === "partial") out.push("", "Tell the user which parts are missing (see Steps). Do not present the answer as complete.");
   console.log(out.join("\n"));
 }
@@ -378,11 +400,17 @@ async function cancel(args) {
 }
 
 async function balance() {
-  const [bal, spend] = await Promise.all([api("GET", "/engine/escrow/balance"), api("GET", "/agent/spend?limit=5")]);
+  // The per-message limit is read too, so an agent can tell what holds. An older backend without it just shows none.
+  const [bal, spend, limit] = await Promise.all([
+    api("GET", "/engine/escrow/balance"),
+    api("GET", "/agent/spend?limit=5"),
+    api("GET", "/agent/spend/limit").catch(() => ({})),
+  ]);
   console.log(
     [
       "— Anjoman account —",
       `Spendable: ${usd(Number(bal.effectiveBalance))}`,
+      `Spend limit per message: ${typeof limit.limitUsd === "number" ? usd(limit.limitUsd) : "none"} (set by the user in Anjoman)`,
       `Deposited: ${usd(Number(bal.escrowBalance))}`,
       bal.agentDebt ? `Owed: ${usd(Number(bal.agentDebt))}` : "",
       spend.totals ? `Spent so far: ${JSON.stringify(spend.totals)}` : "",
@@ -413,7 +441,8 @@ const HELP = `Anjoman skill client
   node anjoman.mjs rule
 
 The key is read from ANJOMAN_API_KEY, or from ${keyFile()} after \`login\`.
-Each request may spend up to $${DEFAULT_MAX_SPEND_USD} unless --max-spend or ANJOMAN_MAX_SPEND_USD says otherwise.`;
+Your spending limit is set in Anjoman (the spend limit button in the chat) and applies to every request from your account;
+--max-spend or ANJOMAN_MAX_SPEND_USD can only set a lower one. With no limit set, your balance is the limit.`;
 
 export async function main(argv) {
   const [command, ...args] = argv;

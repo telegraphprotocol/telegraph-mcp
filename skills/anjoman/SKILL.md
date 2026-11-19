@@ -40,12 +40,12 @@ Start a new conversation (no `--conversation`) when the topic changes.
 - Give the user the answer, and say which sources answered and what it cost. Keep the report's wording for caveats.
 - **Status `PARTIAL`**: only some of the request was answered. Say which parts are missing (see Steps) and do not call the answer complete. Offer to ask again for the missing part.
 - **Status `FAILED` or `UNSUPPORTED`**: say so plainly with the reason shown. Nothing is charged for a failed job. Do not invent an answer; you may offer another route, such as a normal web search, but say that Anjoman could not answer.
-- **Status `STOPPED` (exit code 3)**: the request reached its spend cap. Tell the user what it stopped at and ask before going on. Only if they agree, send the request again with a higher cap: `--max-spend 2`. Never raise the cap yourself.
+- **Status `STOPPED` (exit code 3)**: the request reached the user's spending limit. Tell the user what it stopped at and ask before going on. A limit set in Anjoman can only be raised there, by the user, so tell them where (the spend limit button in the Anjoman chat); `--max-spend` can only lower it. Never raise or remove a limit yourself.
 - An **error** line names the cause: a rejected key, an empty balance, or the rate limit. Pass it on with the suggested next step.
 
 ## Spending
 
-Every request is capped at **$0.50** unless the user sets another amount. `--max-spend <usd>` changes one request; `ANJOMAN_MAX_SPEND_USD` changes the default (`none` removes the cap). Most requests cost a few cents. `node scripts/anjoman.mjs balance` shows the account's balance and recent spend. The script cannot deposit or withdraw: funds are added in the Anjoman app.
+The spending limit is the user's to set, in Anjoman (the spend limit button in the chat at anjoman.ai). It is saved on their account and the backend applies it to every request from the account, so it holds whatever this script sends. With no limit set, the account's balance is the only limit; most requests cost a few cents. `--max-spend <usd>` (one request) or `ANJOMAN_MAX_SPEND_USD` (every request) can only set a lower ceiling. Never set or change a limit yourself. A limit is a ceiling, not the price: while a specialist is working, Anjoman holds back up to about $0.26 for it and returns what it did not cost, so a request that asks several specialists at once needs a cap with room for all of them. A limit under about $0.30 per specialist stops steps early even when the real cost would be cents. `node scripts/anjoman.mjs balance` shows the account's balance, its spending limit and recent spend. The script cannot deposit or withdraw: funds are added in the Anjoman app.
 
 ## Long requests
 
