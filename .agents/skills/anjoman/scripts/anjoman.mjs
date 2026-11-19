@@ -19,8 +19,13 @@ import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 
 const DEFAULT_URL = "https://backend.telegraphprotocol.com";
-/** What one request may spend unless told otherwise. The backend stops the job at this amount and asks for approval. */
-const DEFAULT_MAX_SPEND_USD = 0.5;
+/**
+ * What one request may spend unless told otherwise; the backend stops the job at this amount and asks for approval.
+ * The backend holds back each call's quoted ceiling (about $0.26) from the cap while the call runs, and gives back what
+ * the call did not cost (usually all but a cent or two). A request that asks several specialists at once therefore needs
+ * room for each, so the cap is well above what such a request really costs.
+ */
+const DEFAULT_MAX_SPEND_USD = 2;
 /** How long a request that outlives its connection is followed before handing back its job id. */
 const DEFAULT_WAIT_MINUTES = 15;
 const POLL_MS = 3_000;
@@ -255,7 +260,22 @@ async function ask(args) {
     // The job holds the cost and the final state. One that ended without its `done` event (a dropped connection, a long
     // job) is followed until it ends; one that just finished gets a few seconds to be closed out, so its cost is there.
     let job;
-    if (run.jobId) job = await followJob(run.jobId, run.done || run.error ? CLOSE_OUT_MS : waitMs, progress);
+    if (run.jobId) {
+      try {
+        job = await followJob(run.jobId, run.done || run.error ? CLOSE_OUT_MS : waitMs, progress);
+      } catch (err) {
+        // An answer already received is never thrown away because the job's record could not be read.
+        if (run.done) progress(`could not read the job's final state (${err instanceof Error ? err.message : String(err)})`);
+        else if (run.error) progress("could not read the job's final state");
+        else if (err instanceof Fail && /^404 /.test(err.message)) {
+          throw new Fail(
+            "Anjoman ended the request without an answer and has no record of the job. A first message that fails is discarded, and nothing is charged. Try the request again; if it keeps failing, tell the user.",
+          );
+        } else throw err;
+      }
+    } else if (!run.done && !run.error) {
+      throw new Fail("Anjoman closed the connection without an answer. Nothing is known to have been charged. Try the request again.");
+    }
     const result = summarise(run, job);
     print(result, flags.json);
     process.exitCode = result.status === "waiting_authorization" ? EXIT.needsApproval : result.failed ? EXIT.error : EXIT.ok;

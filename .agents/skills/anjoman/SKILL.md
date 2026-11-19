@@ -45,7 +45,7 @@ Start a new conversation (no `--conversation`) when the topic changes.
 
 ## Spending
 
-Every request is capped at **$0.50** unless the user sets another amount. `--max-spend <usd>` changes one request; `ANJOMAN_MAX_SPEND_USD` changes the default (`none` removes the cap). Most requests cost a few cents. `node scripts/anjoman.mjs balance` shows the account's balance and recent spend. The script cannot deposit or withdraw: funds are added in the Anjoman app.
+Every request is capped at **$2.00** unless the user sets another amount. `--max-spend <usd>` changes one request; `ANJOMAN_MAX_SPEND_USD` changes the default (`none` removes the cap). Most requests cost a few cents: the cap is a ceiling, not the price. While a specialist is working, Anjoman holds back up to about $0.26 for it and returns what it did not cost, so a request that asks several specialists at once needs a cap with room for all of them. A cap under about $0.30 per specialist stops steps early even when the real cost would be cents. `node scripts/anjoman.mjs balance` shows the account's balance and recent spend. The script cannot deposit or withdraw: funds are added in the Anjoman app.
 
 ## Long requests
 

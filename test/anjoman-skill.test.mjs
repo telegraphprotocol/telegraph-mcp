@@ -49,6 +49,11 @@ before(async () => {
           return res.end(JSON.stringify({ message: "Your balance is $0.00" }));
         }
         const head = [["conversation", { conversationId: CONV }], ["job", { jobId: JOB }], ["status", { stage: "classifying", message: "Planning the request" }], ["status", { stage: "asking_miner", message: "Asking TxLens", miner: "txlens" }]];
+        if (scenario === "discarded" || scenario === "no-record") {
+          // The turn failed: the stream ends without `done` or `error`, and (for "discarded") the job is gone with the conversation.
+          sse(res, head);
+          return res.end();
+        }
         if (scenario === "dropped") {
           // The connection ends after the job id, before any `done`.
           sse(res, head);
@@ -57,6 +62,14 @@ before(async () => {
         const steps = scenario === "partial" ? [step(), step({ intent: "WEATHER_NOW", status: "failed", reason: "provider_unavailable", miner: undefined, receipt: undefined })] : [step()];
         sse(res, [...head, ["trace", { steps }], ["done", { messageId: "m1", answer: scenario === "partial" ? "BTC is $97,000. Weather could not be read." : "BTC is $97,000.", status: scenario === "partial" ? "partial" : "complete", files: [], sources: [{ intent: "CRYPTO_PRICE_USD", question: "q", kind: "miner", miner: { slug: "txlens", name: "TxLens", rank: 2 }, receiptHash: "0xabc123" }], timings: { totalMs: 2000, byCategory: {} } }]]);
         return res.end();
+      }
+      if (req.url === `/agent/jobs/${JOB}` && scenario === "answer-without-job") {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ message: "boom" }));
+      }
+      if (req.url === `/agent/jobs/${JOB}` && scenario === "discarded") {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ message: "Job not found." }));
       }
       if (req.url === `/agent/jobs/${JOB}`) {
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -112,7 +125,7 @@ test("asks Anjoman with the key and a default spend cap, and reports the answer,
   // Progress is on stderr so the answer stays clean on stdout.
   assert.match(r.stderr, /Planning the request/);
   assert.match(r.stderr, /Asking TxLens/);
-  assert.deepEqual(lastChat().body, { message: "What is the BTC price in USD?", maxSpendUsd: 0.5 });
+  assert.deepEqual(lastChat().body, { message: "What is the BTC price in USD?", maxSpendUsd: 2 });
   assert.equal(lastChat().auth, "Bearer anjoman_test_key");
 });
 
@@ -153,6 +166,27 @@ test("a dropped connection is followed by its job instead of being lost", async 
   assert.match(r.stdout, /Finished while you were away\./);
   assert.match(r.stdout, /Cost: \$0\.02/);
   assert.match(r.stderr, /connection lost|following the job/);
+});
+
+test("a failed first message, whose job was discarded with its conversation, is reported plainly", async () => {
+  scenario = "discarded";
+  const r = await run(["ask", "x", "--wait", "1"]);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /ended the request without an answer and has no record of the job/);
+  assert.match(r.stderr, /nothing is charged/i);
+  assert.doesNotMatch(r.stderr, /404 from/);
+});
+
+test("an answer already received is kept even when the job's record cannot be read", async () => {
+  scenario = "complete";
+  // Same as "complete" but the job read fails: the answer must still be printed, with the cost unknown.
+  const before = seen.length;
+  scenario = "answer-without-job";
+  const r = await run(["ask", "x"]);
+  assert.equal(r.code, 0);
+  assert.match(r.stdout, /^BTC is \$97,000\./);
+  assert.match(r.stdout, /Cost: unknown/);
+  assert.ok(seen.length > before);
 });
 
 test("--json prints the whole result as one object", async () => {
