@@ -12,7 +12,7 @@
 //   node anjoman.mjs login                     save the API key (read from the terminal or standard input)
 //   node anjoman.mjs rule                      print the short always-on rule for an agent's instruction file
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -469,8 +469,9 @@ export async function main(argv) {
   }
 }
 
-// Run only when started directly, so tests can import the helpers.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Resolve the launcher path: skill installers may link the script or its directory.
+// Imports still do not run the CLI.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   main(process.argv.slice(2)).catch((err) => {
     console.error(err instanceof Fail ? err.message : `Unexpected error: ${err instanceof Error ? err.message : String(err)}`);
     process.exitCode = err instanceof Fail ? err.code : EXIT.error;
