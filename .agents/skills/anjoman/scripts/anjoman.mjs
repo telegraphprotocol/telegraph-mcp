@@ -20,8 +20,10 @@ import { pathToFileURL } from "node:url";
 
 const DEFAULT_URL = "https://backend.telegraphprotocol.com";
 /**
- * There is no cap unless the user sets one (--max-spend, or ANJOMAN_MAX_SPEND_USD): the account's balance is then the only limit.
- * When a cap is set, the backend stops the job at that amount and asks for approval. It holds back each call's quoted
+ * The user sets their spending limit in Anjoman, on their account, and the backend applies it to every request from the
+ * account, whatever is sent here. This script adds no cap of its own unless --max-spend or ANJOMAN_MAX_SPEND_USD asks for
+ * a lower one for a session; with neither set, the account's limit (or, with none, its balance) is all that applies.
+ * When a cap applies, the backend stops the job at that amount and asks for approval. It holds back each call's quoted
  * ceiling (about $0.26) from the cap while the call runs and gives back what the call did not cost, so a request that asks
  * several specialists at once needs a cap with room for each, well above what such a request really costs.
  */
@@ -372,7 +374,7 @@ function print(r, asJson) {
   const named = r.sources.map((s) => `${s.intent}${s.miner ? ` — ${s.miner.name || s.miner.slug}` : s.kind === "docs" ? " — Telegraph docs" : ""}${s.delivery && s.delivery !== "specialist" ? ` (${s.delivery.replace(/_/g, " ")})` : ""}${s.receiptHash ? ` [receipt ${s.receiptHash}]` : ""}`);
   if (named.length) out.push("Sources:", ...named.map((l) => `  ${l}`));
   if (r.files.length) out.push("Files made (download in the Anjoman app):", ...r.files.map((f) => `  ${f.name} (${f.size} bytes)`));
-  if (r.status === "waiting_authorization") out.push("", "Tell the user what it stopped at and ask whether to continue. If they agree, send the request again with a higher cap, e.g. --max-spend 2.");
+  if (r.status === "waiting_authorization") out.push("", "It stopped at a spending limit. Tell the user what it stopped at and ask whether to continue. A limit the user set in Anjoman can only be raised there (the spend limit button in the chat, at anjoman.ai); --max-spend can only lower it. Never raise or remove a limit yourself.");
   if (r.status === "partial") out.push("", "Tell the user which parts are missing (see Steps). Do not present the answer as complete.");
   console.log(out.join("\n"));
 }
@@ -398,11 +400,17 @@ async function cancel(args) {
 }
 
 async function balance() {
-  const [bal, spend] = await Promise.all([api("GET", "/engine/escrow/balance"), api("GET", "/agent/spend?limit=5")]);
+  // The per-message limit is read too, so an agent can tell what holds. An older backend without it just shows none.
+  const [bal, spend, limit] = await Promise.all([
+    api("GET", "/engine/escrow/balance"),
+    api("GET", "/agent/spend?limit=5"),
+    api("GET", "/agent/spend/limit").catch(() => ({})),
+  ]);
   console.log(
     [
       "— Anjoman account —",
       `Spendable: ${usd(Number(bal.effectiveBalance))}`,
+      `Spend limit per message: ${typeof limit.limitUsd === "number" ? usd(limit.limitUsd) : "none"} (set by the user in Anjoman)`,
       `Deposited: ${usd(Number(bal.escrowBalance))}`,
       bal.agentDebt ? `Owed: ${usd(Number(bal.agentDebt))}` : "",
       spend.totals ? `Spent so far: ${JSON.stringify(spend.totals)}` : "",
@@ -433,7 +441,8 @@ const HELP = `Anjoman skill client
   node anjoman.mjs rule
 
 The key is read from ANJOMAN_API_KEY, or from ${keyFile()} after \`login\`.
-There is no spending cap unless you set one with --max-spend or ANJOMAN_MAX_SPEND_USD; the account's balance is the limit.`;
+Your spending limit is set in Anjoman (the spend limit button in the chat) and applies to every request from your account;
+--max-spend or ANJOMAN_MAX_SPEND_USD can only set a lower one. With no limit set, your balance is the limit.`;
 
 export async function main(argv) {
   const [command, ...args] = argv;

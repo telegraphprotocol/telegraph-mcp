@@ -80,6 +80,10 @@ before(async () => {
         res.writeHead(200, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ effectiveBalance: "4.25", escrowBalance: "5", agentDebt: "0" }));
       }
+      if (req.url === "/agent/spend/limit") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ limitUsd: 0.5 }));
+      }
       if (req.url.startsWith("/agent/spend")) {
         res.writeHead(200, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ totals: { jobs: 2 }, jobs: [{ status: "completed", costUsd: 0.01, startedAt: "2026-11-19T10:00:00Z" }] }));
@@ -158,6 +162,9 @@ test("a request that hit the spend cap exits 3 and tells the agent to ask the us
   assert.equal(r.code, 3);
   assert.match(r.stdout, /Status: STOPPED/);
   assert.match(r.stdout, /ask whether to continue/);
+  // A limit set in Anjoman is raised there, not from the command line.
+  assert.match(r.stdout, /can only be raised there/);
+  assert.match(r.stdout, /--max-spend can only lower it/);
 });
 
 test("a dropped connection is followed by its job instead of being lost", async () => {
@@ -238,6 +245,7 @@ test("login stores the key privately and later requests use it; the key is never
 test("balance shows what is spendable, and cancel and job reach the job endpoints", async () => {
   const b = await run(["balance"]);
   assert.match(b.stdout, /Spendable: \$4\.25/);
+  assert.match(b.stdout, /Spend limit per message: \$0\.50 \(set by the user in Anjoman\)/);
   scenario = "complete";
   const j = await run(["job", JOB]);
   assert.match(j.stdout, /State: completed/);
