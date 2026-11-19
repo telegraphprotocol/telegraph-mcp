@@ -20,12 +20,12 @@ import { pathToFileURL } from "node:url";
 
 const DEFAULT_URL = "https://backend.telegraphprotocol.com";
 /**
- * What one request may spend unless told otherwise; the backend stops the job at this amount and asks for approval.
- * The backend holds back each call's quoted ceiling (about $0.26) from the cap while the call runs, and gives back what
- * the call did not cost (usually all but a cent or two). A request that asks several specialists at once therefore needs
- * room for each, so the cap is well above what such a request really costs.
+ * There is no cap unless the user sets one (--max-spend, or ANJOMAN_MAX_SPEND_USD): the account's balance is then the only limit.
+ * When a cap is set, the backend stops the job at that amount and asks for approval. It holds back each call's quoted
+ * ceiling (about $0.26) from the cap while the call runs and gives back what the call did not cost, so a request that asks
+ * several specialists at once needs a cap with room for each, well above what such a request really costs.
  */
-const DEFAULT_MAX_SPEND_USD = 2;
+const DEFAULT_MAX_SPEND_USD = undefined;
 /** How long a request that outlives its connection is followed before handing back its job id. */
 const DEFAULT_WAIT_MINUTES = 15;
 const POLL_MS = 3_000;
@@ -433,7 +433,7 @@ const HELP = `Anjoman skill client
   node anjoman.mjs rule
 
 The key is read from ANJOMAN_API_KEY, or from ${keyFile()} after \`login\`.
-Each request may spend up to $${DEFAULT_MAX_SPEND_USD} unless --max-spend or ANJOMAN_MAX_SPEND_USD says otherwise.`;
+There is no spending cap unless you set one with --max-spend or ANJOMAN_MAX_SPEND_USD; the account's balance is the limit.`;
 
 export async function main(argv) {
   const [command, ...args] = argv;

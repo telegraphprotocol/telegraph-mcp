@@ -98,7 +98,7 @@ const home = () => mkdtempSync(join(tmpdir(), "anjoman-skill-"));
 
 function run(args, env = {}, input) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [SCRIPT, ...args], { env: { ...process.env, ANJOMAN_API_URL: base, ANJOMAN_HOME: home(), ANJOMAN_API_KEY: "anjoman_test_key", ...env } });
+    const child = spawn(process.execPath, [SCRIPT, ...args], { env: { ...process.env, ANJOMAN_API_URL: base, ANJOMAN_HOME: home(), ANJOMAN_API_KEY: "anjoman_test_key", ANJOMAN_MAX_SPEND_USD: "", ...env } });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (c) => (stdout += c));
@@ -111,7 +111,7 @@ function run(args, env = {}, input) {
 
 const lastChat = () => seen.findLast((r) => r.url === "/agent/chat");
 
-test("asks Anjoman with the key and a default spend cap, and reports the answer, steps, receipt and cost", async () => {
+test("asks Anjoman with the key and no spend cap by default, and reports the answer, steps, receipt and cost", async () => {
   scenario = "complete";
   const r = await run(["ask", "What is the BTC price in USD?"]);
   assert.equal(r.code, 0);
@@ -125,7 +125,8 @@ test("asks Anjoman with the key and a default spend cap, and reports the answer,
   // Progress is on stderr so the answer stays clean on stdout.
   assert.match(r.stderr, /Planning the request/);
   assert.match(r.stderr, /Asking TxLens/);
-  assert.deepEqual(lastChat().body, { message: "What is the BTC price in USD?", maxSpendUsd: 2 });
+  // No spending cap unless the user sets one: the account's balance is the limit.
+  assert.deepEqual(lastChat().body, { message: "What is the BTC price in USD?" });
   assert.equal(lastChat().auth, "Bearer anjoman_test_key");
 });
 
