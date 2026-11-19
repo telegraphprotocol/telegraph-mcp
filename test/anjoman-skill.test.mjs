@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, symlinkSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 
 const SCRIPT = new URL("../skills/anjoman/scripts/anjoman.mjs", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
@@ -100,9 +101,9 @@ after(() => server.close());
 
 const home = () => mkdtempSync(join(tmpdir(), "anjoman-skill-"));
 
-function run(args, env = {}, input) {
+function run(args, env = {}, input, script = SCRIPT) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [SCRIPT, ...args], { env: { ...process.env, ANJOMAN_API_URL: base, ANJOMAN_HOME: home(), ANJOMAN_API_KEY: "anjoman_test_key", ANJOMAN_MAX_SPEND_USD: "", ...env } });
+    const child = spawn(process.execPath, [script, ...args], { env: { ...process.env, ANJOMAN_API_URL: base, ANJOMAN_HOME: home(), ANJOMAN_API_KEY: "anjoman_test_key", ANJOMAN_MAX_SPEND_USD: "", ...env } });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (c) => (stdout += c));
@@ -268,4 +269,43 @@ test("the always-on rule is marked so it can be found and removed, and the skill
   assert.match(front, /^name: anjoman$/m);
   const description = /^description: (.+)$/m.exec(front)?.[1] ?? "";
   assert.ok(description.length > 100 && description.length <= 1024, `description is ${description.length} characters`);
+});
+
+
+test("a symlinked skill directory runs help, login, balance, ask and follow-ups", async () => {
+  const dir = home();
+  const linked = join(dir, "linked skill scripts");
+  symlinkSync(dirname(SCRIPT), linked, "dir");
+  const script = join(linked, "anjoman.mjs");
+  const help = await run(["help"], {}, undefined, script);
+  assert.equal(help.code, 0);
+  assert.match(help.stdout, /Anjoman skill client/);
+  const auth = home();
+  const env = { ANJOMAN_HOME: auth, ANJOMAN_API_KEY: "", TELEGRAPH_API_KEY: "" };
+  const login = await run(["login"], env, "anjoman_test_key\n", script);
+  assert.equal(login.code, 0);
+  assert.equal(readFileSync(join(auth, "key"), "utf8").trim(), "anjoman_test_key");
+  assert.equal(statSync(join(auth, "key")).mode & 0o777, 0o600);
+  assert.doesNotMatch(login.stdout + login.stderr, /anjoman_test_key/);
+  const balance = await run(["balance"], env, undefined, script);
+  assert.match(balance.stdout, /Spendable: \$4\.25/);
+  scenario = "complete";
+  const ask = await run(["ask", "BTC price", "--json"], env, undefined, script);
+  const result = JSON.parse(ask.stdout);
+  assert.equal(ask.code, 0);
+  assert.equal(result.steps[0].receipt, "0xabc123");
+  assert.equal(result.costUsd, 0.0123);
+  await run(["ask", "and in euros?", "--conversation", CONV], env, undefined, script);
+  assert.equal(lastChat().body.conversationId, CONV);
+});
+
+test("importing the symlinked helper does not execute its CLI", async () => {
+  const linked = join(home(), "linked-helper.mjs");
+  symlinkSync(SCRIPT, linked);
+  const result = await new Promise((resolve) => {
+    execFile(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(pathToFileURL(linked).href)})`],
+      (error, stdout, stderr) => resolve({ error, stdout, stderr }));
+  });
+  assert.equal(result.error, null);
+  assert.equal(result.stdout + result.stderr, "");
 });
