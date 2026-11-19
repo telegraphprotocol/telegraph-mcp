@@ -3,6 +3,13 @@
   "notGrouped": "bottom",
   "groupings": [
     {
+      "title": "Anjoman",
+      "description": "Make Anjoman your agent's default for outside intelligence: live data, research, security and compliance checks, and multi-step workflows. One script and one API key; Anjoman plans the work, picks the ranked miners, recovers from failures and returns one answer with sources, cost and receipts.",
+      "skills": [
+        "anjoman"
+      ]
+    },
+    {
       "title": "Telegraph Protocol",
       "description": "Ask the Telegraph network's ranked miners (prices, FX, weather, search, security, code review and 100+ intents), browse intents, miners and rankings, and pay per ask in USDC from a Telegraph escrow through the Telegraph MCP server.",
       "skills": [

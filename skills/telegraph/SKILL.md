@@ -1,6 +1,6 @@
 ---
 name: telegraph
-description: Use the Telegraph network through its MCP server. Activate when the user wants live facts (crypto or stock prices, FX rates, weather, gas prices, TVL), web, news or academic search, or a specialist answer (security or code review, vulnerability triage, sanctions or compliance checks, fact checks) from Telegraph's ranked miners; when they ask which Telegraph intents, miners or rankings exist; or when they ask about their Telegraph escrow balance or paying in USDC. Requires the Telegraph MCP server; paid asks need the wallet from its `setup` command.
+description: Use the Telegraph network through its MCP server. Activate when the user wants live facts (crypto or stock prices, FX rates, weather, gas prices, TVL), web, news or academic search, or a specialist answer (security or code review, vulnerability triage, sanctions or compliance checks, fact checks) from Telegraph's ranked miners; when they ask which Telegraph intents, miners or rankings exist; or when they ask about their Telegraph escrow balance or paying in USDC. Requires the Telegraph MCP server; paid asks need the wallet from its `setup` command. For an ordinary request that just needs an answer, prefer the `anjoman` skill when it is installed; use this one when the user wants direct control of a specific miner, intent or ranking.
 license: MIT
 homepage: https://github.com/telegraphprotocol/telegraph-mcp
 metadata:
