@@ -4,7 +4,7 @@ Each ask costs the price of each miner endpoint whose answer it uses, usually $0
 
 ## With an Anjoman API key
 
-If `TELEGRAPH_API_KEY` is set, none of the below applies: asks go through your Anjoman account, which pays from its own escrow balance. There is no wallet, no signing and no `fund` or `withdraw`. Deposit in Anjoman (sign in, then Deposit in the wallet menu); `telegraph_account` shows the balance and what recent jobs cost. An empty balance is refused with a message and nothing is charged. The spending limits below do not apply; the balance does, and so does the key's limit of 30 requests a minute.
+If `TELEGRAPH_API_KEY` is set, none of the below applies: asks go through your Anjoman account, which pays from its own escrow balance. There is no wallet, no signing and no `fund` or `withdraw`. Deposit in Anjoman (sign in, then Deposit in the wallet menu); `telegraph_account` shows the balance and what recent jobs cost. An empty balance is refused with a message and nothing is charged. The spending limits below do not apply; the balance does, and so does the key's limit of 30 requests a minute. An auto-routed ask (`telegraph_ask_auto`) holds a budget of $0.26 while it runs and is billed only for the miners whose answers are used; a miner call (`telegraph_ask_miner`) costs that miner's price.
 
 ## Escrow (the default)
 

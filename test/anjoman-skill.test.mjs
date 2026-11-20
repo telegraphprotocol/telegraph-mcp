@@ -40,6 +40,11 @@ before(async () => {
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, body: body ? JSON.parse(body) : undefined });
+      // The node's public miner list, read without a key to find a slug's id.
+      if (req.url === "/engine/v1/miners") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ miners: [{ id: 377, slug: "crypto-kraken", name: "Kraken Spot Price" }] }));
+      }
       if (req.headers.authorization !== "Bearer anjoman_test_key") {
         res.writeHead(401, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ message: "Invalid API key" }));
@@ -76,6 +81,27 @@ before(async () => {
         res.writeHead(200, { "Content-Type": "application/json" });
         const state = scenario === "cap" ? { id: JOB, status: "waiting_authorization", outcome: "failed", reason: "spend_limit_reached", costUsd: 0.5 } : scenario === "dropped" ? { id: JOB, status: "completed", outcome: "complete", answer: "Finished while you were away.", costUsd: 0.02, conversationId: CONV } : { id: JOB, status: "completed", outcome: "complete", costUsd: 0.0123 };
         return res.end(JSON.stringify(state));
+      }
+      if (req.url === "/engine/ask" || req.url.startsWith("/engine/ask/")) {
+        if (scenario === "empty-balance") {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          return res.end(JSON.stringify({ message: "Insufficient escrow balance: you have $0.00 effective, this call costs $0.26." }));
+        }
+        const partial = scenario === "partial";
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(
+          JSON.stringify({
+            result: {
+              result: { price_usd: 61744, symbol: "BTC" },
+              intent: "CRYPTO_PRICE_USD",
+              miner_id: "377",
+              miner_name: "Kraken Spot Price",
+              cost_usd: 0.01,
+              ...(req.url === "/engine/ask" ? { fulfillment: { status: partial ? "partial" : "complete", missing_ids: partial ? ["volume_24h"] : undefined, payments: [{ amount_uusdc: 10000, receipt_hash: "0xfeed" }] } } : {}),
+            },
+            receipt: { receipt_hash: "0xfeed", rail: "escrow" },
+          }),
+        );
       }
       if (req.url.startsWith("/engine/escrow/balance")) {
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -250,6 +276,54 @@ test("balance shows what is spendable, and cancel and job reach the job endpoint
   scenario = "complete";
   const j = await run(["job", JOB]);
   assert.match(j.stdout, /State: completed/);
+});
+
+const lastEngine = () => seen.findLast((r) => r.url === "/engine/ask" || r.url.startsWith("/engine/ask/"));
+
+test("auto sends an auto-routed ask with the key and no budget of its own, and reports the fields, miner, cost and receipt", async () => {
+  scenario = "complete";
+  const r = await run(["auto", "What is the BTC price in USD?"]);
+  assert.equal(r.code, 0, r.stderr);
+  assert.deepEqual(lastEngine(), { method: "POST", url: "/engine/ask", auth: "Bearer anjoman_test_key", body: { query: "What is the BTC price in USD?" } });
+  assert.match(r.stdout, /price_usd: 61744/);
+  assert.match(r.stdout, /— Anjoman · auto-routed ask —/);
+  assert.match(r.stdout, /Status: complete/);
+  assert.match(r.stdout, /Miner: Kraken Spot Price \(id 377\)/);
+  assert.match(r.stdout, /Cost: \$0\.01/);
+  assert.match(r.stdout, /Receipt: 0xfeed/);
+});
+
+test("auto takes an exact intent with params, and flags a partial answer with what is missing", async () => {
+  scenario = "partial";
+  const r = await run(["auto", "--intent", "crypto_price_usd", "--params", '{"symbol":"BTC"}']);
+  assert.deepEqual(lastEngine().body, { intent: "CRYPTO_PRICE_USD", params: { symbol: "BTC" } });
+  assert.match(r.stdout, /Status: PARTIAL/);
+  assert.match(r.stdout, /Missing: volume_24h/);
+});
+
+test("miner sends a miner call to one miner, finding a slug's id first, with a question or the miner's own endpoint", async () => {
+  scenario = "complete";
+  const q = await run(["miner", "crypto-kraken", "BTC price"], { ANJOMAN_NODE_URL: base });
+  assert.equal(q.code, 0, q.stderr);
+  assert.deepEqual(lastEngine(), { method: "POST", url: "/engine/ask/377", auth: "Bearer anjoman_test_key", body: { query: "BTC price" } });
+  assert.match(q.stdout, /— Anjoman · miner call —/);
+  assert.match(q.stdout, /Miner: Kraken Spot Price \(id 377\)/);
+  await run(["miner", "377", "--endpoint", "/price", "--method", "GET", "--payload", '{"s":"BTC"}'], { ANJOMAN_NODE_URL: base });
+  assert.deepEqual(lastEngine().body, { method: "GET", endpoint: "/price", payload: { s: "BTC" } });
+});
+
+test("auto and miner pass the API's reason on and exit 1 when the account cannot pay", async () => {
+  scenario = "empty-balance";
+  const r = await run(["auto", "BTC price"]);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /400 from \/engine\/ask: Insufficient escrow balance/);
+});
+
+test("auto and miner need a question or an intent with params, and miner needs a miner", async () => {
+  assert.equal((await run(["auto"])).code, 2);
+  assert.equal((await run(["auto", "--params", '{"a":1}'])).code, 2);
+  assert.equal((await run(["miner"])).code, 2);
+  assert.equal((await run(["auto", "--params", "not json", "--intent", "X"])).code, 2);
 });
 
 test("the copy under .agents/skills is identical to skills/, so the two cannot drift", () => {

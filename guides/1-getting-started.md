@@ -36,7 +36,8 @@ Claim it at <https://anjoman.ai/dashboard/faucet> (sign in) and send it to your 
 ## Tools
 
 - `telegraph_ask`: ask a question; the node picks the miner, and asks the next ranked miners for what its answer missed. Paid.
-- `telegraph_ask_miner`: ask one miner you choose. Paid.
+- `telegraph_ask_miner`: a miner call, to one miner you choose. Paid.
+- `telegraph_ask_auto`: with an API key only, the node's auto-routed ask without Anjoman's agent (`telegraph_ask` is then a multi-miner call through the agent). Paid.
 - `telegraph_find_intents`, `telegraph_intent`: what can be asked, and how. Free.
 - `telegraph_find_miners`, `telegraph_ranking`: who answers, and how well they rank. Free.
 - `telegraph_account`: balances, limits and how to top up. (`telegraph_deposit` only with `TELEGRAPH_ALLOW_AGENT_DEPOSIT`.)

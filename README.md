@@ -76,9 +76,12 @@ If you have an Anjoman account, you can skip the wallet. Create a key on the **A
 
 No `setup` is needed. In key mode:
 
-- `telegraph_ask` goes through your Anjoman account, which picks the sources, can combine several for one question, and writes the answer. It is paid from the account's escrow balance. A question can take up to a minute.
+- `telegraph_ask` is a multi-miner call through your Anjoman account's agent: it splits the request across intents and miners, combines their answers and writes one reply. A question can take up to a minute.
+- `telegraph_ask_auto` is the node's auto-routed ask, without the agent: the node picks the top live miner and asks the next ones for what it missed. It holds a budget of $0.26 while it runs and is billed only for the miners whose answers are used.
+- `telegraph_ask_miner` is a miner call: one miner you choose, with a question or one of its endpoints, at that miner's price.
+- All three are paid from the account's escrow balance.
 - `telegraph_account` shows the account's escrow balance and what its last jobs cost. Top up in Anjoman: this server cannot deposit.
-- `telegraph_ask_miner` and `telegraph_deposit` are not offered: a key cannot call one miner directly or move funds.
+- `telegraph_deposit` is not offered: a key cannot move funds.
 - The free tools (`telegraph_find_intents`, `telegraph_intent`, `telegraph_find_miners`, `telegraph_ranking`, `telegraph_docs`) work as before.
 - The wallet, `TELEGRAPH_PAYMENT` and the per-ask and daily limits do not apply. The account's balance and the key's own limits (30 requests a minute, an optional expiry) do. Revoke the key in Anjoman to cut off an agent at once.
 
@@ -89,7 +92,8 @@ Treat the key like a password: it can spend your balance. Keep it in an agent's 
 | Tool | Cost | What it does |
 |---|---|---|
 | `telegraph_ask` | ~$0.01 per miner used | Ask a question, optionally with an exact intent and params. The node routes it to the top live miner, and asks the next ones for what it missed |
-| `telegraph_ask_miner` | the miner's price | Ask one miner you choose, or call one of its endpoints directly |
+| `telegraph_ask_miner` | the miner's price | Miner call: ask one miner you choose, or call one of its endpoints directly |
+| `telegraph_ask_auto` | ~$0.01 per miner used | API key only: the node's auto-routed ask, without Anjoman's agent |
 | `telegraph_find_intents` | free | Search the 130+ intents (kinds of question) |
 | `telegraph_intent` | free | One intent's kind, params, answer fields and top miners |
 | `telegraph_find_miners` | free | An intent's miners with rank, score, price and endpoints, or a word search over all miners |

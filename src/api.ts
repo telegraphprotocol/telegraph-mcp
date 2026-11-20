@@ -1,4 +1,5 @@
-// Key mode: asks go through the user's Anjoman account (agent chat), which pays from the account's escrow itself.
+// Key mode: asks go through the user's Anjoman account, which pays from the account's escrow itself: the agent
+// (agent chat), an auto-routed ask (the node picks the miner) or a miner call (one named miner).
 // No wallet, signature or chain call happens in this process.
 
 const ASK_WAIT_MS = 110_000; // the API answers at once or hands back a job within about 80 seconds
@@ -9,6 +10,15 @@ export interface AskArgs {
   message: string;
   intent?: string;
   params?: Record<string, unknown>;
+}
+
+// The body of an auto-routed ask or a miner call, as the node takes it (the account adds the budget itself).
+export type EngineBody = Record<string, unknown>;
+
+// What the account returns for an auto-routed ask or a miner call: the node's reply and its payment receipt.
+export interface EngineResult {
+  result: any;
+  receipt: unknown;
 }
 
 export interface AskResult {
@@ -56,6 +66,17 @@ export class AnjomanApi {
     const { status, body } = await this.request("POST", "/agent/chat", { ...args, stream: false }, ASK_WAIT_MS);
     if (status !== 202) return this.result(body);
     return this.follow(body.jobId, body.conversationId);
+  }
+
+  // Auto-routed: the node picks the best-ranked live miner and asks the next ones for what it missed, within the
+  // account's budget of 0.26 USDC per ask (only the miners whose answers are used are billed).
+  async askAuto(body: EngineBody): Promise<EngineResult> {
+    return (await this.request("POST", "/engine/ask", body, ASK_WAIT_MS)).body;
+  }
+
+  // Miner call: one named miner, no routing and no fallback, at that miner's price.
+  async askMiner(miner: string, body: EngineBody): Promise<EngineResult> {
+    return (await this.request("POST", `/engine/ask/${encodeURIComponent(miner)}`, body, ASK_WAIT_MS)).body;
   }
 
   // The turn outlived the wait: read its job until it ends.
