@@ -6,6 +6,9 @@
 // Anjoman does the planning, the choice of miners, the combining and the recovery; this file only carries the request.
 //
 //   node anjoman.mjs ask "What is the BTC price?" [--conversation <id>] [--max-spend <usd>] [--json] [--quiet]
+//   node anjoman.mjs auto "BTC price" [--intent X --params JSON] [--json]   auto-routed ask: the node picks the miner
+//   node anjoman.mjs miner <id|slug> ["question"] [--intent X --params JSON | --endpoint /p --method GET --payload JSON]
+//                                              miner call: one named miner, no routing
 //   node anjoman.mjs job <jobId> [--wait]      read a request that is still running, or ended
 //   node anjoman.mjs cancel <jobId>            stop a request that is still running
 //   node anjoman.mjs balance                   the account's escrow balance and recent spend
@@ -19,6 +22,10 @@ import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 
 const DEFAULT_URL = "https://backend.telegraphprotocol.com";
+/** The Telegraph node, read only to find a miner's id from its slug for a miner call. */
+const DEFAULT_NODE_URL = "https://devnode.telegraphprotocol.com";
+/** An auto-routed ask or a miner call answers in one reply: the node's own deadline is 60 seconds, plus payment. */
+const ENGINE_WAIT_MS = 120_000;
 /**
  * The user sets their spending limit in Anjoman, on their account, and the backend applies it to every request from the
  * account, whatever is sent here. This script adds no cap of its own unless --max-spend or ANJOMAN_MAX_SPEND_USD asks for
@@ -36,6 +43,7 @@ const EXIT = { ok: 0, error: 1, usage: 2, needsApproval: 3 };
 
 const env = process.env;
 const apiUrl = () => (env.ANJOMAN_API_URL || env.TELEGRAPH_API_URL || DEFAULT_URL).replace(/\/$/, "");
+const nodeUrl = () => (env.ANJOMAN_NODE_URL || env.TELEGRAPH_URL || DEFAULT_NODE_URL).replace(/\/$/, "");
 const homeDir = () => env.ANJOMAN_HOME || join(homedir(), ".anjoman");
 const keyFile = () => join(homeDir(), "key");
 
@@ -379,6 +387,102 @@ function print(r, asJson) {
   console.log(out.join("\n"));
 }
 
+// ─── auto, miner ────────────────────────────────────────────────────────────────────────────────
+// Straight to the Telegraph node through the account, without Anjoman's agent: no planning and no written answer, just the
+// miner's answer in the intent's fields. Paid from the account's escrow like `ask`.
+
+function jsonObject(name, raw) {
+  try {
+    const value = JSON.parse(raw);
+    if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  } catch {
+    // Reported below.
+  }
+  throw new Fail(`--${name} must be a JSON object, e.g. '{"symbol":"BTC"}'.`, EXIT.usage);
+}
+
+/** A question, an exact intent with its params, or both (the node reads the missing params from the question). */
+function canonicalBody(question, flags) {
+  const params = flags.params !== undefined ? jsonObject("params", flags.params) : undefined;
+  const intent = flags.intent ? flags.intent.trim().toUpperCase() : undefined;
+  if (params && !intent) throw new Fail("--params need --intent.", EXIT.usage);
+  if (!question && !params) throw new Fail('Give a question, or --intent with --params, e.g. node anjoman.mjs auto "BTC price in USD"', EXIT.usage);
+  return { ...(question && { query: question }), ...(intent && { intent }), ...(params && { params }) };
+}
+
+/** The node's miner call finds a miner by id, so a slug is looked up on the node first; unknown, it is sent as given. */
+async function minerId(miner) {
+  if (/^\d+$/.test(miner)) return miner;
+  try {
+    const res = await fetch(`${nodeUrl()}/engine/v1/miners`, { signal: AbortSignal.timeout(15_000) });
+    const found = ((await res.json()).miners || []).find((m) => m.slug === miner);
+    return found ? String(found.id) : miner;
+  } catch {
+    return miner;
+  }
+}
+
+async function auto(args) {
+  const { flags, rest } = parseFlags(args, { intent: "value", params: "value", json: "boolean" });
+  const body = canonicalBody(await readMessage(rest), flags);
+  printEngine(await api("POST", "/engine/ask", body, { signal: AbortSignal.timeout(ENGINE_WAIT_MS) }), "auto-routed ask", flags.json);
+}
+
+async function miner(args) {
+  const { flags, rest } = parseFlags(args, { intent: "value", params: "value", endpoint: "value", method: "value", payload: "value", json: "boolean" });
+  const [who, ...words] = rest;
+  if (!who) throw new Fail('Give the miner, e.g. node anjoman.mjs miner crypto-kraken "BTC price"', EXIT.usage);
+  const question = words.join(" ").trim();
+  let body;
+  if (flags.endpoint) {
+    if (question || flags.intent || flags.params) throw new Fail("Send either a question (with --intent and --params), or --endpoint with --method and --payload, not both.", EXIT.usage);
+    body = { method: (flags.method || "GET").toUpperCase(), endpoint: flags.endpoint, payload: flags.payload ? jsonObject("payload", flags.payload) : {} };
+  } else {
+    body = canonicalBody(question, flags);
+  }
+  const id = await minerId(who);
+  printEngine(await api("POST", `/engine/ask/${encodeURIComponent(id)}`, body, { signal: AbortSignal.timeout(ENGINE_WAIT_MS) }), "miner call", flags.json);
+}
+
+function fieldLines(answer) {
+  if (answer && typeof answer === "object" && !Array.isArray(answer)) {
+    return Object.entries(answer).map(([k, v]) => `${k}: ${v !== null && typeof v === "object" ? JSON.stringify(v) : v}`);
+  }
+  return [typeof answer === "string" ? answer : JSON.stringify(answer)];
+}
+
+/** The node's reply, as the account hands it back: `result` is the node's body and `receipt` the payment's. */
+function printEngine(r, kind, asJson) {
+  const b = r?.result && typeof r.result === "object" ? r.result : { result: r?.result };
+  const f = b.fulfillment;
+  const receipt = r?.receipt?.receipt_hash ?? r?.receipt?.receiptHash ?? f?.payments?.[0]?.receipt_hash;
+  const out = {
+    kind,
+    answer: b.result,
+    status: f?.status ?? "answered",
+    intent: b.intent,
+    miner: b.miner_name ? `${b.miner_name} (id ${b.miner_id})` : b.miner_id,
+    costUsd: b.cost_usd ?? null,
+    receipt,
+    missing: f?.missing_ids,
+    resultShape: b.result_shape,
+    fieldStatus: b.field_status,
+    payments: f?.payments,
+    warnings: b.warnings,
+  };
+  if (asJson) return console.log(JSON.stringify(out, null, 2));
+  const label = { complete: "complete", partial: "PARTIAL — only part of the request was answered", unverifiable: "UNVERIFIABLE — an answer exists but could not be checked", unavailable: "UNAVAILABLE — nothing usable came back" }[out.status] ?? out.status;
+  const lines = [...fieldLines(out.answer), "", `— Anjoman · ${kind} —`, `Status: ${label}`];
+  if (out.intent) lines.push(`Intent: ${out.intent}`);
+  if (out.miner) lines.push(`Miner: ${out.miner}`);
+  lines.push(`Cost: ${usd(out.costUsd)}`);
+  if (out.receipt) lines.push(`Receipt: ${out.receipt}`);
+  if (out.missing?.length) lines.push(`Missing: ${out.missing.join(", ")}`);
+  if (out.warnings?.length) lines.push(`Warnings: ${out.warnings.join("; ")}`);
+  if (out.status === "partial") lines.push("", "Tell the user which fields are missing. Do not present the answer as complete.");
+  console.log(lines.join("\n"));
+}
+
 // ─── job, cancel, balance ───────────────────────────────────────────────────────────────────────
 
 async function job(args) {
@@ -434,6 +538,9 @@ When a task needs information or analysis from outside this conversation and the
 const HELP = `Anjoman skill client
 
   node anjoman.mjs ask "<request>" [--conversation <id>] [--max-spend <usd|none>] [--wait <minutes>] [--json] [--quiet]
+  node anjoman.mjs auto "<question>" [--intent <INTENT> --params '<json>'] [--json]
+  node anjoman.mjs miner <id|slug> ["<question>"] [--intent <INTENT> --params '<json>'] [--json]
+  node anjoman.mjs miner <id|slug> --endpoint </path> [--method GET|POST] [--payload '<json>'] [--json]
   node anjoman.mjs job <jobId> [--wait] [--json]
   node anjoman.mjs cancel <jobId>
   node anjoman.mjs balance
@@ -442,13 +549,19 @@ const HELP = `Anjoman skill client
 
 The key is read from ANJOMAN_API_KEY, or from ${keyFile()} after \`login\`.
 Your spending limit is set in Anjoman (the spend limit button in the chat) and applies to every request from your account;
---max-spend or ANJOMAN_MAX_SPEND_USD can only set a lower one. With no limit set, your balance is the limit.`;
+--max-spend or ANJOMAN_MAX_SPEND_USD can only set a lower one. With no limit set, your balance is the limit.
+auto (auto-routed ask) and miner (miner call) go straight to the Telegraph node, without the agent. An auto-routed ask holds
+a budget of $0.26 while it runs and is billed only for the miners whose answers are used; a miner call costs that miner's price.`;
 
 export async function main(argv) {
   const [command, ...args] = argv;
   switch (command) {
     case "ask":
       return ask(args);
+    case "auto":
+      return auto(args);
+    case "miner":
+      return miner(args);
     case "job":
       return job(args);
     case "cancel":
@@ -478,4 +591,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
   });
 }
 
-export { spendCap, summarise, parseFlags, events, stepLine, RULE };
+export { spendCap, summarise, parseFlags, events, stepLine, canonicalBody, RULE };

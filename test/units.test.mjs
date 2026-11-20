@@ -7,7 +7,7 @@ import { loadConfig } from "../dist/config.js";
 import { saveWallet, readWalletKey, newKey, walletPath, walletUnreadable } from "../dist/wallet.js";
 import { Dedupe, SpendLog, requestKey } from "../dist/limits.js";
 import { AnjomanApi } from "../dist/api.js";
-import { keyAnswer, routedAskBody } from "../dist/tools.js";
+import { keyAnswer, keyEngineAnswer, routedAskBody } from "../dist/tools.js";
 import { Payer, billedOf } from "../dist/pay.js";
 
 const home = () => mkdtempSync(join(tmpdir(), "tg-mcp-"));
@@ -193,6 +193,48 @@ test("key mode shows the balance and recent spend, and says how to top up", asyn
     assert.deepEqual(a.escrow, { spendable_usd: "1.5", deposited_usd: "2", debt_usd: "0" });
     assert.deepEqual(a.recent_jobs, [{ status: "completed", cost_usd: 0.01, at: "2026-11-16T00:00:00Z" }]);
     assert.match(a.top_up, /Deposit/);
+  } finally {
+    api.restore();
+  }
+});
+
+test("key mode sends the auto-routed ask to the account's /engine/ask, with the key and no budget of its own", async () => {
+  const reply = { result: { result: { price_usd: 61744 }, intent: "CRYPTO_PRICE_USD", miner_id: "377", miner_name: "Kraken", cost_usd: 0.01, fulfillment: { status: "complete" } }, receipt: { receipt_hash: "0xabc", rail: "escrow" } };
+  const api = fakeApi([[200, reply]]);
+  try {
+    const r = await new AnjomanApi("http://api.test", KEY).askAuto({ query: "BTC price" });
+    assert.deepEqual(api.calls[0], { url: "http://api.test/engine/ask", method: "POST", auth: `Bearer ${KEY}`, body: { query: "BTC price" } });
+    const out = JSON.parse(keyEngineAnswer(r).content[0].text);
+    assert.deepEqual(out.answer, { price_usd: 61744 });
+    assert.equal(out.miner, "Kraken (id 377)");
+    assert.equal(out.cost_usd, 0.01);
+    assert.equal(out.fulfillment.status, "complete");
+    assert.deepEqual(out.receipt, { receipt_hash: "0xabc", rail: "escrow" });
+    assert.equal(keyEngineAnswer(r).isError, undefined);
+  } finally {
+    api.restore();
+  }
+});
+
+test("key mode sends a miner call to the account's /engine/ask/{miner}: a question, or the miner's own endpoint", async () => {
+  const api = fakeApi([[200, { result: { result: "ok" }, receipt: null }], [200, { result: { result: "raw" }, receipt: null }]]);
+  try {
+    const key = new AnjomanApi("http://api.test", KEY);
+    await key.askMiner("377", { query: "BTC price" });
+    await key.askMiner("a b", { method: "GET", endpoint: "/price", payload: { s: "BTC" } });
+    assert.deepEqual(api.calls.map((c) => [c.url, c.body]), [
+      ["http://api.test/engine/ask/377", { query: "BTC price" }],
+      ["http://api.test/engine/ask/a%20b", { method: "GET", endpoint: "/price", payload: { s: "BTC" } }],
+    ]);
+  } finally {
+    api.restore();
+  }
+});
+
+test("key mode passes the API's reason on when it refuses an ask", async () => {
+  const api = fakeApi([[400, { message: "Insufficient escrow balance: you have $0.00 effective, this call costs $0.26.", statusCode: 400 }]]);
+  try {
+    await assert.rejects(new AnjomanApi("http://api.test", KEY).askAuto({ query: "hi" }), /400 from \/engine\/ask: Insufficient escrow balance/);
   } finally {
     api.restore();
   }

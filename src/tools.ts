@@ -5,7 +5,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Config } from "./config.js";
 import { Payer, type PaidResponse } from "./pay.js";
 import { Chain } from "./chain.js";
-import { AnjomanApi, type AskResult } from "./api.js";
+import { AnjomanApi, type AskResult, type EngineResult } from "./api.js";
 import { cached, getJson } from "./http.js";
 import { loadGuides, searchGuides } from "./docs.js";
 
@@ -86,9 +86,9 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
     {
       title: "Ask Telegraph",
       description: api
-        ? "Ask Anjoman a question: live prices, FX, weather, web and academic search, security, code review, " +
-          "compliance and 100+ other intents. It picks the best-ranked sources, can combine several for one " +
-          "question, and writes the answer. Paid from the Anjoman account's escrow balance (a few cents at most per " +
+        ? "Multi-miner call through Anjoman's agent: live prices, FX, weather, web and academic search, security, code " +
+          "review, compliance and 100+ other intents. It splits the request across intents and miners, asks the " +
+          "best-ranked ones, combines their answers and writes one reply. Paid from the Anjoman account's escrow balance (a few cents at most per " +
           "question); an empty balance is refused with a message and nothing is charged. A question can take up to a minute."
         : "Ask the Telegraph network a question: live prices, FX, weather, web and academic search, security, code " +
           "review, compliance and 100+ other intents. The node routes it to the best-ranked live miner and returns " +
@@ -111,16 +111,34 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
     }),
   );
 
-  // One specific miner is a call to the node's engine, which an API key cannot make: key mode has only telegraph_ask.
-  if (!api) server.registerTool(
+  // Key mode's auto-routed ask: the node's own routing, without the agent. In wallet mode telegraph_ask is this already.
+  if (api) server.registerTool(
+    "telegraph_ask_auto",
+    {
+      title: "Auto-routed ask",
+      description:
+        "Ask the Telegraph node directly, without Anjoman's agent: the node routes the question (or an exact intent " +
+        "with params) to the best-ranked live miner and returns its answer in the intent's fields. When that answer " +
+        "misses part of the question, the next ranked miners are asked for the rest, within a budget of $0.26 per ask " +
+        "that is held while it runs; only the miners whose answers are used are billed (about $0.01 each). Paid from " +
+        "the Anjoman account's escrow balance. fulfillment says whether the answer is complete and which miner gave " +
+        "each field. For a multi-miner call, use telegraph_ask: Anjoman's agent splits the request across intents and " +
+        "miners and combines them into one written answer.",
+      inputSchema: askShape,
+      annotations: paid,
+    },
+    guard(async (a) => keyEngineAnswer(await api.askAuto(askBody(a)))),
+  );
+
+  server.registerTool(
     "telegraph_ask_miner",
     {
-      title: "Ask one miner",
+      title: "Miner call",
       description:
         "Ask one specific miner (by id or slug from telegraph_find_miners) instead of letting the node pick. Send " +
         "a question (with intent when the miner serves several), or call one of its endpoints directly with " +
-        "endpoint, method and payload (the raw answer comes back). No fallback miner is tried. Paid like " +
-        "telegraph_ask, at that miner's price.",
+        "endpoint, method and payload (the raw answer comes back). No fallback miner is tried. Paid at that miner's " +
+        (api ? "price, from the Anjoman account's escrow balance." : "price, like telegraph_ask."),
       inputSchema: {
         miner: z.string().describe("Miner id or slug."),
         ...askShape,
@@ -131,11 +149,12 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
       annotations: paid,
     },
     guard(async (a) => {
-      if (!payer) return fail(NO_KEY);
+      if (!api && !payer) return fail(NO_KEY);
       const body = a.endpoint ? { method: a.method || "GET", endpoint: a.endpoint, payload: a.payload || {} } : askBody(a);
       // The node's direct-call form finds a miner by id only, so a slug is looked up first.
-      const id = (await miners().catch(() => [] as any[])).find((m) => m.slug === a.miner)?.id ?? a.miner;
-      return answer(await payer.post(`/engine/v1/ask/${encodeURIComponent(id)}`, body), true);
+      const id = String((await miners().catch(() => [] as any[])).find((m) => m.slug === a.miner)?.id ?? a.miner);
+      if (api) return keyEngineAnswer(await api.askMiner(id, body));
+      return answer(await payer!.post(`/engine/v1/ask/${encodeURIComponent(id)}`, body), true);
     }),
   );
 
@@ -394,6 +413,23 @@ export function keyAnswer(r: AskResult): Text {
     note: r.note,
   };
   return r.status === "running" || r.status === "cancelled" || r.status === "interrupted" ? fail(JSON.stringify(reply, null, 2)) : ok(reply);
+}
+
+// A reply to an auto-routed ask or a miner call made through the Anjoman account: the node's reply, and the account's
+// payment receipt. A refusal never gets here: the API's own reason is thrown and shown as the tool's error.
+export function keyEngineAnswer(r: EngineResult): Text {
+  const b = r?.result && typeof r.result === "object" ? r.result : { result: r?.result };
+  return ok({
+    answer: b.result,
+    intent: b.intent,
+    miner: b.miner_name ? `${b.miner_name} (id ${b.miner_id})` : b.miner_id,
+    result_shape: b.result_shape,
+    field_status: b.field_status,
+    fulfillment: b.fulfillment,
+    cost_usd: b.cost_usd,
+    receipt: r?.receipt ?? undefined,
+    warnings: b.warnings,
+  });
 }
 
 function answer(r: PaidResponse, oneMiner = false): Text {

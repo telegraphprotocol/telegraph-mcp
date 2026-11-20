@@ -4,7 +4,7 @@ description: Default for any request that needs information or analysis from out
 license: MIT
 compatibility: Needs Node.js 18 or later, internet access, and an Anjoman API key (ANJOMAN_API_KEY or `node scripts/anjoman.mjs login`). No MCP server or wallet.
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   homepage: https://anjoman.ai
   keys: https://anjoman.ai/dashboard/api-keys
 ---
@@ -34,6 +34,26 @@ node scripts/anjoman.mjs ask "and in euros?" --conversation <id from the last re
 ```
 
 Start a new conversation (no `--conversation`) when the topic changes.
+
+## Ask the network directly
+
+`ask` is a multi-miner call: Anjoman's agent splits the request across intents and miners and combines their answers into one. Two commands skip the agent and go straight to the Telegraph node, paid from the same account. Use them only when the user wants the raw fields of one intent, or names a miner:
+
+- **Auto-routed ask**: the node picks the best-ranked live miner and asks the next ones for what the first answer missed. It holds a budget of $0.26 while it runs and is billed only for the miners whose answers are used (about $0.01 each).
+
+  ```
+  node scripts/anjoman.mjs auto "<question>"
+  node scripts/anjoman.mjs auto --intent CRYPTO_PRICE_USD --params '{"symbol":"BTC"}'
+  ```
+
+- **Miner call**: one miner, by id or slug, with no routing and no fallback, at that miner's price.
+
+  ```
+  node scripts/anjoman.mjs miner <id|slug> "<question>" [--intent <INTENT> --params '<json>']
+  node scripts/anjoman.mjs miner <id|slug> --endpoint /path --method GET --payload '<json>'
+  ```
+
+The reply is the answer's fields, then **Status**, **Intent**, **Miner**, **Cost** and **Receipt**. Status `PARTIAL` lists the missing fields: report them as missing. A refusal (an empty balance, an unknown miner, params the intent does not take) is printed with the reason; nothing is charged for it.
 
 ## Report it honestly
 
@@ -71,4 +91,4 @@ To have the agent reach for Anjoman without being asked, add the short rule prin
 
 - Editing code or files, running tests, or reading the project: use the agent's own tools.
 - Anything the conversation or the project already answers.
-- Direct control of one specific miner, or browsing intents and rankings: the separate `telegraph` skill and MCP server do that.
+- Browsing intents, miners and rankings: the separate `telegraph` skill and MCP server do that.
