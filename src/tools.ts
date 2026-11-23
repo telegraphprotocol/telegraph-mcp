@@ -2,10 +2,10 @@ import { z } from "zod";
 import { fileURLToPath } from "node:url";
 import { sep } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Config } from "./config.js";
+import { KEY_PAYMENTS, type Config, type KeyPayment } from "./config.js";
 import { Payer, type PaidResponse } from "./pay.js";
 import { Chain } from "./chain.js";
-import { AnjomanApi, type AskResult, type EngineResult } from "./api.js";
+import { AnjomanApi, paymentFields, type AskResult, type EngineResult } from "./api.js";
 import { cached, getJson } from "./http.js";
 import { loadGuides, searchGuides } from "./docs.js";
 
@@ -78,6 +78,16 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
       ...(a.params ? { params: a.params } : {}),
     };
   };
+  // Key mode only: how the account pays for this ask. Without it, TELEGRAPH_KEY_PAYMENT (default escrow).
+  const paymentSchema = z
+    .enum(KEY_PAYMENTS)
+    .optional()
+    .describe(
+      `How the Anjoman account pays: escrow (its escrow balance), solana (x402 from its Solana address, every ` +
+        `account has one) or evm (x402 from its EVM address, wallet-connected accounts only). Default: ${cfg.keyPayment}.`,
+    );
+  const payShape: Record<string, typeof paymentSchema> = api ? { payment: paymentSchema } : {};
+  const payBody = (a: { payment?: KeyPayment }) => paymentFields(a.payment ?? cfg.keyPayment);
   const paid = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
   const free = { readOnlyHint: true, openWorldHint: true };
 
@@ -88,8 +98,9 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
       description: api
         ? "Multi-miner call through Anjoman's agent: live prices, FX, weather, web and academic search, security, code " +
           "review, compliance and 100+ other intents. It splits the request across intents and miners, asks the " +
-          "best-ranked ones, combines their answers and writes one reply. Paid from the Anjoman account's escrow balance (a few cents at most per " +
-          "question); an empty balance is refused with a message and nothing is charged. A question can take up to a minute."
+          "best-ranked ones, combines their answers and writes one reply. Paid by the Anjoman account (a few cents at most per " +
+          "question), from its escrow balance or with x402 on Solana (see payment); an empty balance is refused with a " +
+          "message and nothing is charged. A question can take up to a minute."
         : "Ask the Telegraph network a question: live prices, FX, weather, web and academic search, security, code " +
           "review, compliance and 100+ other intents. The node routes it to the best-ranked live miner and returns " +
           "its answer in the intent's fields. When that answer misses part of the question, the next ranked miners " +
@@ -97,15 +108,15 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
           "costs its price, about $0.01, paid automatically from the Telegraph escrow balance (a failed ask is never " +
           "billed; repeating the same ask within a minute is not paid twice). fulfillment says whether the answer " +
           "is complete, which miner gave each field, and the payments.",
-      inputSchema: askShape,
+      inputSchema: { ...askShape, ...payShape },
       annotations: paid,
     },
-    guard(async (a) => {
+    guard(async (a: AskArgs & { payment?: KeyPayment }) => {
       if (api) {
         if (a.params && !a.intent) throw new Error("params need an intent.");
         if (!a.question && !a.params) throw new Error("Give a question, or an intent with params.");
         const intent = a.intent ? name(a.intent) : undefined;
-        return keyAnswer(await api.ask({ message: a.question || `Ask ${intent}`, intent, params: a.params }));
+        return keyAnswer(await api.ask({ message: a.question || `Ask ${intent}`, intent, params: a.params, ...payBody(a) }));
       }
       return payer ? answer(await payer.post("/engine/v1/ask", routedAskBody(cfg, askBody(a)))) : fail(NO_KEY);
     }),
@@ -120,14 +131,15 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
         "Ask the Telegraph node directly, without Anjoman's agent: the node routes the question (or an exact intent " +
         "with params) to the best-ranked live miner and returns its answer in the intent's fields. When that answer " +
         "misses part of the question, the next ranked miners are asked for the rest, within a budget of $0.26 per ask " +
-        "that is held while it runs; only the miners whose answers are used are billed (about $0.01 each). Paid from " +
-        "the Anjoman account's escrow balance. fulfillment says whether the answer is complete and which miner gave " +
-        "each field. For a multi-miner call, use telegraph_ask: Anjoman's agent splits the request across intents and " +
-        "miners and combines them into one written answer.",
-      inputSchema: askShape,
+        "that is held while it runs; only the miners whose answers are used are billed (about $0.01 each). Paid by " +
+        "the Anjoman account, from its escrow balance or with x402 (see payment). Paid on Solana it goes without the " +
+        "budget, so one miner answers and nothing is filled in from the next ones. fulfillment says whether the answer " +
+        "is complete and which miner gave each field. For a multi-miner call, use telegraph_ask: Anjoman's agent splits " +
+        "the request across intents and miners and combines them into one written answer.",
+      inputSchema: { ...askShape, ...payShape },
       annotations: paid,
     },
-    guard(async (a) => keyEngineAnswer(await api.askAuto(askBody(a)))),
+    guard(async (a: AskArgs & { payment?: KeyPayment }) => keyEngineAnswer(await api.askAuto({ ...askBody(a), ...payBody(a) }))),
   );
 
   server.registerTool(
@@ -138,10 +150,11 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
         "Ask one specific miner (by id or slug from telegraph_find_miners) instead of letting the node pick. Send " +
         "a question (with intent when the miner serves several), or call one of its endpoints directly with " +
         "endpoint, method and payload (the raw answer comes back). No fallback miner is tried. Paid at that miner's " +
-        (api ? "price, from the Anjoman account's escrow balance." : "price, like telegraph_ask."),
+        (api ? "price, by the Anjoman account, from its escrow balance or with x402 (see payment)." : "price, like telegraph_ask."),
       inputSchema: {
         miner: z.string().describe("Miner id or slug."),
         ...askShape,
+        ...payShape,
         endpoint: z.string().optional().describe("Direct call: the miner's endpoint path, e.g. /query (telegraph_find_miners lists them)."),
         method: z.enum(["GET", "POST"]).optional().describe("Direct call: HTTP method (default GET)."),
         payload: z.record(z.any()).optional().describe("Direct call: the body or query fields the endpoint takes."),
@@ -153,7 +166,7 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
       const body = a.endpoint ? { method: a.method || "GET", endpoint: a.endpoint, payload: a.payload || {} } : askBody(a);
       // The node's direct-call form finds a miner by id only, so a slug is looked up first.
       const id = String((await miners().catch(() => [] as any[])).find((m) => m.slug === a.miner)?.id ?? a.miner);
-      if (api) return keyEngineAnswer(await api.askMiner(id, body));
+      if (api) return keyEngineAnswer(await api.askMiner(id, { ...body, ...payBody(a as { payment?: KeyPayment }) }));
       return answer(await payer!.post(`/engine/v1/ask/${encodeURIComponent(id)}`, body), true);
     }),
   );

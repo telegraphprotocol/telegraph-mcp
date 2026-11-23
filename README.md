@@ -62,6 +62,7 @@ All optional.
 | `TELEGRAPH_PRIVATE_KEY` | none | Use this key instead of the wallet file. For servers and CI. (`TELEGRAPH_EVM_PRIVATE_KEY`, the v1 name, also works.) |
 | `TELEGRAPH_API_KEY` | none | An Anjoman API key (`anjoman_…`). Switches to [key mode](#using-an-api-key-instead-of-a-wallet): no wallet is used |
 | `TELEGRAPH_API_URL` | `https://backend.telegraphprotocol.com` | Where the API key is used |
+| `TELEGRAPH_KEY_PAYMENT` | `escrow` | Key mode: how the account pays unless a call sets `payment`. `escrow`; `solana` (x402 from the account's Solana address); `evm` (x402 from its EVM address, wallet-connected accounts only) |
 | `TELEGRAPH_ALLOW_AGENT_DEPOSIT` | off | Also give the agent a `telegraph_deposit` tool |
 | `TELEGRAPH_URL` | `https://devnode.telegraphprotocol.com` | The node (the Telegraph testnet) |
 | `TELEGRAPH_RPC_URL`, `TELEGRAPH_DIAMOND`, `TELEGRAPH_CHAIN_ID` | the testnet's (diamond `0x72a70e949362670Bf8bceAd24eFC5b8f950aa08b`) | The chain and the contract that holds escrow |
@@ -79,7 +80,7 @@ No `setup` is needed. In key mode:
 - `telegraph_ask` is a multi-miner call through your Anjoman account's agent: it splits the request across intents and miners, combines their answers and writes one reply. A question can take up to a minute.
 - `telegraph_ask_auto` is the node's auto-routed ask, without the agent: the node picks the top live miner and asks the next ones for what it missed. It holds a budget of $0.26 while it runs and is billed only for the miners whose answers are used.
 - `telegraph_ask_miner` is a miner call: one miner you choose, with a question or one of its endpoints, at that miner's price.
-- All three are paid from the account's escrow balance.
+- All three are paid by the account: from its escrow balance by default, or with x402 from its Solana address (`payment: "solana"`; every account has one, funded from the Wallet menu in Anjoman) or its EVM address (`payment: "evm"`, wallet-connected accounts only). `TELEGRAPH_KEY_PAYMENT` sets the default. Paid on Solana, `telegraph_ask_auto` goes without the budget: one miner answers.
 - `telegraph_account` shows the account's escrow balance and what its last jobs cost. Top up in Anjoman: this server cannot deposit.
 - `telegraph_deposit` is not offered: a key cannot move funds.
 - The free tools (`telegraph_find_intents`, `telegraph_intent`, `telegraph_find_miners`, `telegraph_ranking`, `telegraph_docs`) work as before.

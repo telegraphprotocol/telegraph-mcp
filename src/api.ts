@@ -1,6 +1,13 @@
-// Key mode: asks go through the user's Anjoman account, which pays from the account's escrow itself: the agent
-// (agent chat), an auto-routed ask (the node picks the miner) or a miner call (one named miner).
-// No wallet, signature or chain call happens in this process.
+import type { KeyPayment } from "./config.js";
+
+// Key mode: asks go through the user's Anjoman account, which pays for them itself — from its escrow balance, or
+// x402 from its Solana or EVM address: the agent (agent chat), an auto-routed ask (the node picks the miner) or a
+// miner call (one named miner). No wallet, signature or chain call happens in this process.
+
+/** The body fields that choose how the account pays. Escrow is the account's default, so it needs none. */
+export function paymentFields(payment: KeyPayment): Record<string, string> {
+  return payment === "escrow" ? {} : { paymentMethod: "x402", network: payment };
+}
 
 const ASK_WAIT_MS = 110_000; // the API answers at once or hands back a job within about 80 seconds
 const POLL_EVERY_MS = 3_000;
@@ -10,6 +17,8 @@ export interface AskArgs {
   message: string;
   intent?: string;
   params?: Record<string, unknown>;
+  paymentMethod?: string;
+  network?: string;
 }
 
 // The body of an auto-routed ask or a miner call, as the node takes it (the account adds the budget itself).
@@ -69,7 +78,8 @@ export class AnjomanApi {
   }
 
   // Auto-routed: the node picks the best-ranked live miner and asks the next ones for what it missed, within the
-  // account's budget of 0.26 USDC per ask (only the miners whose answers are used are billed).
+  // account's budget of 0.26 USDC per ask (only the miners whose answers are used are billed). Paid on Solana it
+  // goes without the budget: one miner answers.
   async askAuto(body: EngineBody): Promise<EngineResult> {
     return (await this.request("POST", "/engine/ask", body, ASK_WAIT_MS)).body;
   }
@@ -112,10 +122,18 @@ export class AnjomanApi {
     const b = balance.body;
     return {
       mode: "Anjoman account, through an API key",
-      escrow: { spendable_usd: b.effectiveBalance, deposited_usd: b.escrowBalance, debt_usd: b.agentDebt },
+      // spendable = in escrow − not yet charged − a requested withdrawal (the node's ledger keeps no debt).
+      escrow: {
+        spendable_usd: b.effectiveBalance,
+        in_escrow_usd: b.escrowBalance,
+        not_yet_charged_usd: b.unbilled ?? "0",
+        withdrawal_requested: b.withdrawal ?? null,
+      },
       totals: spend.body.totals,
       recent_jobs: (spend.body.jobs || []).map((j: any) => ({ status: j.status, cost_usd: j.costUsd, at: j.startedAt })),
-      top_up: "Add funds in Anjoman: sign in, then use Deposit in the wallet menu. This server cannot deposit.",
+      top_up:
+        "Add funds in Anjoman: sign in, then use Deposit in the wallet menu. Asks paid with x402 on Solana come from the " +
+        "account's Solana address instead (in the same menu; free test USDC at https://faucet.circle.com). This server cannot deposit.",
     };
   }
 }
