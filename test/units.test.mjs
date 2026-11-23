@@ -185,12 +185,17 @@ test("key mode passes the API's own reason on when it refuses", async () => {
 
 test("key mode shows the balance and recent spend, and says how to top up", async () => {
   const api = fakeApi([
-    [200, { effectiveBalance: "1.5", escrowBalance: "2", agentDebt: "0" }],
+    [200, { effectiveBalance: "1.5", escrowBalance: "2", agentDebt: "0", unbilled: "0.2", withdrawal: { status: "waiting_root", amount: "0.3", requestedAt: 1, fallbackAt: 2 } }],
     [200, { totals: [{ usageKind: "paid", jobs: 1, costUsd: 0.01 }], jobs: [{ status: "completed", costUsd: 0.01, startedAt: "2026-11-16T00:00:00Z", question: "private" }] }],
   ]);
   try {
     const a = await new AnjomanApi("http://api.test", KEY).account();
-    assert.deepEqual(a.escrow, { spendable_usd: "1.5", deposited_usd: "2", debt_usd: "0" });
+    assert.deepEqual(a.escrow, {
+      spendable_usd: "1.5",
+      in_escrow_usd: "2",
+      not_yet_charged_usd: "0.2",
+      withdrawal_requested: { status: "waiting_root", amount: "0.3", requestedAt: 1, fallbackAt: 2 },
+    });
     assert.deepEqual(a.recent_jobs, [{ status: "completed", cost_usd: 0.01, at: "2026-11-16T00:00:00Z" }]);
     assert.match(a.top_up, /Deposit/);
   } finally {

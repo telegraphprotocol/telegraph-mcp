@@ -4,7 +4,7 @@ description: Default for any request that needs information or analysis from out
 license: MIT
 compatibility: Needs Node.js 18 or later, internet access, and an Anjoman API key (ANJOMAN_API_KEY or `node scripts/anjoman.mjs login`). No MCP server or wallet.
 metadata:
-  version: 0.2.0
+  version: 0.3.0
   homepage: https://anjoman.ai
   keys: https://anjoman.ai/dashboard/api-keys
 ---
@@ -54,6 +54,16 @@ Start a new conversation (no `--conversation`) when the topic changes.
   ```
 
 The reply is the answer's fields, then **Status**, **Intent**, **Miner**, **Cost** and **Receipt**. Status `PARTIAL` lists the missing fields: report them as missing. A refusal (an empty balance, an unknown miner, params the intent does not take) is printed with the reason; nothing is charged for it.
+
+## How it is paid
+
+Every command is paid by the user's Anjoman account, from its escrow balance unless the user asks otherwise. `--pay` (on `ask`, `auto` and `miner`) or `ANJOMAN_PAY` chooses:
+
+- `escrow`: the account's escrow balance. The default.
+- `solana`: x402 from the account's Solana address, in devnet USDC. Every account has one; the user funds it from the Wallet menu in Anjoman (free test USDC at https://faucet.circle.com).
+- `evm`: x402 from the account's EVM address. Wallet-connected accounts only.
+
+Use `--pay solana` only when the user asks to pay on Solana. On Solana an `auto` ask is answered by one miner, without filling in missing fields from the next ones.
 
 ## Report it honestly
 

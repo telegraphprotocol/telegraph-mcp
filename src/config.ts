@@ -20,7 +20,12 @@ export interface Config {
   agentDeposit: boolean; // also give the agent a telegraph_deposit tool
   apiKey?: string; // an Anjoman API key (anjoman_…): asks go through that account instead of this server's wallet
   apiUrl: string; // where the key is used
+  keyPayment: KeyPayment; // how a key's asks are paid unless a call says otherwise
 }
+
+// How an ask made with an API key is paid: from the account's escrow balance, or x402 from its Solana or EVM address.
+export const KEY_PAYMENTS = ["escrow", "solana", "evm"] as const;
+export type KeyPayment = (typeof KEY_PAYMENTS)[number];
 
 // The Telegraph testnet on Ethereum Sepolia: the default network, so the server
 // works with no settings at all.
@@ -64,6 +69,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (apiKey && !/^(anjoman|tgk)_[A-Za-z0-9_-]{20,}$/.test(apiKey)) {
     throw new Error("TELEGRAPH_API_KEY must be an Anjoman API key, which starts with anjoman_ (create one on the API keys page)");
   }
+  const keyPayment = (env.TELEGRAPH_KEY_PAYMENT || "escrow").trim().toLowerCase() as KeyPayment;
+  if (!KEY_PAYMENTS.includes(keyPayment)) throw new Error("TELEGRAPH_KEY_PAYMENT must be escrow, solana or evm");
   const diamond = env.TELEGRAPH_DIAMOND || DEFAULTS.diamond;
   if (!/^0x[0-9a-fA-F]{40}$/.test(diamond)) throw new Error("TELEGRAPH_DIAMOND must be an address");
   return {
@@ -80,5 +87,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     agentDeposit: /^(1|true|yes)$/i.test(env.TELEGRAPH_ALLOW_AGENT_DEPOSIT || ""),
     apiKey: apiKey || undefined,
     apiUrl: (env.TELEGRAPH_API_URL || DEFAULTS.apiUrl).replace(/\/+$/, ""),
+    keyPayment,
   };
 }

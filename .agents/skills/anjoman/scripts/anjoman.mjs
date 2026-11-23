@@ -5,10 +5,11 @@
 // to read: the answer, what it cost, which sources answered with their receipts, and the conversation id for a follow-up.
 // Anjoman does the planning, the choice of miners, the combining and the recovery; this file only carries the request.
 //
-//   node anjoman.mjs ask "What is the BTC price?" [--conversation <id>] [--max-spend <usd>] [--json] [--quiet]
-//   node anjoman.mjs auto "BTC price" [--intent X --params JSON] [--json]   auto-routed ask: the node picks the miner
-//   node anjoman.mjs miner <id|slug> ["question"] [--intent X --params JSON | --endpoint /p --method GET --payload JSON]
+//   node anjoman.mjs ask "What is the BTC price?" [--conversation <id>] [--max-spend <usd>] [--pay <how>] [--json] [--quiet]
+//   node anjoman.mjs auto "BTC price" [--intent X --params JSON] [--pay <how>] [--json]   auto-routed ask: the node picks the miner
+//   node anjoman.mjs miner <id|slug> ["question"] [--intent X --params JSON | --endpoint /p --method GET --payload JSON] [--pay <how>]
 //                                              miner call: one named miner, no routing
+//   --pay escrow|solana|evm                    how the account pays (default escrow, or ANJOMAN_PAY)
 //   node anjoman.mjs job <jobId> [--wait]      read a request that is still running, or ended
 //   node anjoman.mjs cancel <jobId>            stop a request that is still running
 //   node anjoman.mjs balance                   the account's escrow balance and recent spend
@@ -200,6 +201,18 @@ function parseFlags(args, spec) {
   return { flags, rest };
 }
 
+const PAYMENTS = ["escrow", "solana", "evm"];
+
+/**
+ * The body fields that choose how the account pays: escrow (its escrow balance, the default, so no fields), or x402 from
+ * its Solana address (every account has one) or its EVM address (wallet-connected accounts only).
+ */
+function paymentFields(flag) {
+  const pay = String(flag ?? env.ANJOMAN_PAY ?? "escrow").trim().toLowerCase();
+  if (!PAYMENTS.includes(pay)) throw new Fail(`--pay must be escrow, solana or evm: got "${pay}".`, EXIT.usage);
+  return pay === "escrow" ? {} : { paymentMethod: "x402", network: pay };
+}
+
 function spendCap(flag) {
   const raw = flag ?? env.ANJOMAN_MAX_SPEND_USD;
   if (raw === undefined || raw === "") return DEFAULT_MAX_SPEND_USD;
@@ -223,10 +236,11 @@ async function readMessage(words) {
 }
 
 async function ask(args) {
-  const { flags, rest } = parseFlags(args, { conversation: "value", "max-spend": "value", json: "boolean", quiet: "boolean", wait: "value" });
+  const { flags, rest } = parseFlags(args, { conversation: "value", "max-spend": "value", pay: "value", json: "boolean", quiet: "boolean", wait: "value" });
   const message = await readMessage(rest);
   if (!message) throw new Fail('Give the request, e.g. node anjoman.mjs ask "What is the BTC price in USD?"', EXIT.usage);
   const maxSpendUsd = spendCap(flags["max-spend"]);
+  const payment = paymentFields(flags.pay);
   const waitMs = Number(flags.wait ?? DEFAULT_WAIT_MINUTES) * 60_000;
   const progress = (text) => {
     if (!flags.quiet && !flags.json) process.stderr.write(`… ${text}\n`);
@@ -242,7 +256,7 @@ async function ask(args) {
       res = await fetch(`${apiUrl()}/agent/chat`, {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "text/event-stream, application/json" },
-        body: JSON.stringify({ message, ...(flags.conversation && { conversationId: flags.conversation }), ...(maxSpendUsd !== undefined && { maxSpendUsd }) }),
+        body: JSON.stringify({ message, ...(flags.conversation && { conversationId: flags.conversation }), ...(maxSpendUsd !== undefined && { maxSpendUsd }), ...payment }),
         signal: controller.signal,
       });
     } catch (err) {
@@ -389,7 +403,8 @@ function print(r, asJson) {
 
 // ─── auto, miner ────────────────────────────────────────────────────────────────────────────────
 // Straight to the Telegraph node through the account, without Anjoman's agent: no planning and no written answer, just the
-// miner's answer in the intent's fields. Paid from the account's escrow like `ask`.
+// miner's answer in the intent's fields. Paid by the account like `ask` (--pay). Paid on Solana, an auto-routed ask goes
+// without the budget, so one miner answers.
 
 function jsonObject(name, raw) {
   try {
@@ -423,13 +438,13 @@ async function minerId(miner) {
 }
 
 async function auto(args) {
-  const { flags, rest } = parseFlags(args, { intent: "value", params: "value", json: "boolean" });
-  const body = canonicalBody(await readMessage(rest), flags);
+  const { flags, rest } = parseFlags(args, { intent: "value", params: "value", pay: "value", json: "boolean" });
+  const body = { ...canonicalBody(await readMessage(rest), flags), ...paymentFields(flags.pay) };
   printEngine(await api("POST", "/engine/ask", body, { signal: AbortSignal.timeout(ENGINE_WAIT_MS) }), "auto-routed ask", flags.json);
 }
 
 async function miner(args) {
-  const { flags, rest } = parseFlags(args, { intent: "value", params: "value", endpoint: "value", method: "value", payload: "value", json: "boolean" });
+  const { flags, rest } = parseFlags(args, { intent: "value", params: "value", endpoint: "value", method: "value", payload: "value", pay: "value", json: "boolean" });
   const [who, ...words] = rest;
   if (!who) throw new Fail('Give the miner, e.g. node anjoman.mjs miner crypto-kraken "BTC price"', EXIT.usage);
   const question = words.join(" ").trim();
@@ -441,6 +456,7 @@ async function miner(args) {
     body = canonicalBody(question, flags);
   }
   const id = await minerId(who);
+  body = { ...body, ...paymentFields(flags.pay) };
   printEngine(await api("POST", `/engine/ask/${encodeURIComponent(id)}`, body, { signal: AbortSignal.timeout(ENGINE_WAIT_MS) }), "miner call", flags.json);
 }
 
@@ -515,11 +531,13 @@ async function balance() {
       "— Anjoman account —",
       `Spendable: ${usd(Number(bal.effectiveBalance))}`,
       `Spend limit per message: ${typeof limit.limitUsd === "number" ? usd(limit.limitUsd) : "none"} (set by the user in Anjoman)`,
-      `Deposited: ${usd(Number(bal.escrowBalance))}`,
-      bal.agentDebt ? `Owed: ${usd(Number(bal.agentDebt))}` : "",
+      `In escrow: ${usd(Number(bal.escrowBalance))} (as of the last ledger root)`,
+      Number(bal.unbilled) > 0 ? `Not yet charged: ${usd(Number(bal.unbilled))} (counted against Spendable)` : "",
+      bal.withdrawal ? `Withdrawal requested: ${usd(Number(bal.withdrawal.amount))} (${bal.withdrawal.status}; counted against Spendable)` : "",
+      Number(bal.agentDebt) > 0 ? `Owed: ${usd(Number(bal.agentDebt))}` : "",
       spend.totals ? `Spent so far: ${JSON.stringify(spend.totals)}` : "",
       ...(spend.jobs || []).map((j) => `  ${j.startedAt ?? ""} ${j.status} ${usd(j.costUsd)}`),
-      "Top up in Anjoman (Deposit in the wallet menu). This script cannot move funds.",
+      "Top up in Anjoman (Deposit in the wallet menu). Calls with --pay solana are paid from the account's Solana address instead (same menu; free test USDC at https://faucet.circle.com). This script cannot move funds.",
     ]
       .filter(Boolean)
       .join("\n"),
@@ -537,10 +555,10 @@ When a task needs information or analysis from outside this conversation and the
 
 const HELP = `Anjoman skill client
 
-  node anjoman.mjs ask "<request>" [--conversation <id>] [--max-spend <usd|none>] [--wait <minutes>] [--json] [--quiet]
-  node anjoman.mjs auto "<question>" [--intent <INTENT> --params '<json>'] [--json]
-  node anjoman.mjs miner <id|slug> ["<question>"] [--intent <INTENT> --params '<json>'] [--json]
-  node anjoman.mjs miner <id|slug> --endpoint </path> [--method GET|POST] [--payload '<json>'] [--json]
+  node anjoman.mjs ask "<request>" [--conversation <id>] [--max-spend <usd|none>] [--pay <how>] [--wait <minutes>] [--json] [--quiet]
+  node anjoman.mjs auto "<question>" [--intent <INTENT> --params '<json>'] [--pay <how>] [--json]
+  node anjoman.mjs miner <id|slug> ["<question>"] [--intent <INTENT> --params '<json>'] [--pay <how>] [--json]
+  node anjoman.mjs miner <id|slug> --endpoint </path> [--method GET|POST] [--payload '<json>'] [--pay <how>] [--json]
   node anjoman.mjs job <jobId> [--wait] [--json]
   node anjoman.mjs cancel <jobId>
   node anjoman.mjs balance
@@ -551,7 +569,10 @@ The key is read from ANJOMAN_API_KEY, or from ${keyFile()} after \`login\`.
 Your spending limit is set in Anjoman (the spend limit button in the chat) and applies to every request from your account;
 --max-spend or ANJOMAN_MAX_SPEND_USD can only set a lower one. With no limit set, your balance is the limit.
 auto (auto-routed ask) and miner (miner call) go straight to the Telegraph node, without the agent. An auto-routed ask holds
-a budget of $0.26 while it runs and is billed only for the miners whose answers are used; a miner call costs that miner's price.`;
+a budget of $0.26 while it runs and is billed only for the miners whose answers are used; a miner call costs that miner's price.
+--pay (or ANJOMAN_PAY) chooses how your account pays: escrow (your escrow balance, the default), solana (x402 from your
+account's Solana address) or evm (x402 from its EVM address, wallet-connected accounts only). Paid on Solana, an auto-routed
+ask is answered by one miner, without filling in from the next ones.`;
 
 export async function main(argv) {
   const [command, ...args] = argv;
@@ -591,4 +612,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
   });
 }
 
-export { spendCap, summarise, parseFlags, events, stepLine, canonicalBody, RULE };
+export { spendCap, summarise, parseFlags, events, stepLine, canonicalBody, paymentFields, RULE };
