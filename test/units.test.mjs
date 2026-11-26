@@ -7,7 +7,7 @@ import { loadConfig } from "../dist/config.js";
 import { saveWallet, readWalletKey, newKey, walletPath, walletUnreadable } from "../dist/wallet.js";
 import { Dedupe, SpendLog, requestKey } from "../dist/limits.js";
 import { AnjomanApi } from "../dist/api.js";
-import { keyAnswer, keyEngineAnswer, routedAskBody } from "../dist/tools.js";
+import { keyAnswer, keyEngineAnswer, minerKey, routedAskBody } from "../dist/tools.js";
 import { Payer, billedOf } from "../dist/pay.js";
 
 const home = () => mkdtempSync(join(tmpdir(), "tg-mcp-"));
@@ -234,6 +234,17 @@ test("key mode sends a miner call to the account's /engine/ask/{miner}: a questi
   } finally {
     api.restore();
   }
+});
+
+test("a miner call names the miner by slug when it can; the direct form keeps the id", () => {
+  const listed = [{ id: 377, slug: "crypto-kraken" }, { id: 9 }];
+  assert.equal(minerKey("crypto-kraken", listed, false), "crypto-kraken");
+  assert.equal(minerKey("377", listed, false), "crypto-kraken");
+  assert.equal(minerKey("9", listed, false), "9");
+  assert.equal(minerKey("377", [], false), "377");
+  assert.equal(minerKey("crypto-kraken", [], false), "crypto-kraken");
+  assert.equal(minerKey("crypto-kraken", listed, true), "377");
+  assert.equal(minerKey("377", listed, true), "377");
 });
 
 test("key mode passes the API's reason on when it refuses an ask", async () => {

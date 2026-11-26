@@ -49,6 +49,17 @@ const trim = (s: unknown, n: number) => {
 const round = (x: number, d = 4) => Math.round(x * 10 ** d) / 10 ** d;
 const name = (s: string) => s.trim().toUpperCase();
 
+// What to put in /engine/v1/ask/:miner. The question form takes a slug or an id, so a slug is sent whenever it is
+// known (given, or listed for the id given). The direct form (endpoint, method, payload) finds a miner by id only
+// on the node, so there a slug is turned into its id.
+export function minerKey(given: string, listed: any[], direct: boolean): string {
+  const bySlug = listed.find((m) => m.slug === given);
+  if (direct) return String(bySlug?.id ?? given);
+  if (bySlug) return given;
+  const byId = listed.find((m) => String(m.id) === given);
+  return byId?.slug ? String(byId.slug) : given;
+}
+
 export function registerTools(server: McpServer, cfg: Config): Payer | undefined {
   // With an API key, asks go through the user's Anjoman account, which pays for them: the wallet is not used.
   const api = cfg.apiKey ? new AnjomanApi(cfg.apiUrl, cfg.apiKey) : undefined;
@@ -147,12 +158,12 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
     {
       title: "Miner call",
       description:
-        "Ask one specific miner (by id or slug from telegraph_find_miners) instead of letting the node pick. Send " +
+        "Ask one specific miner (by slug or id from telegraph_find_miners; the slug is the safer name) instead of letting the node pick. Send " +
         "a question (with intent when the miner serves several), or call one of its endpoints directly with " +
         "endpoint, method and payload (the raw answer comes back). No fallback miner is tried. Paid at that miner's " +
         (api ? "price, by the Anjoman account, from its escrow balance or with x402 (see payment)." : "price, like telegraph_ask."),
       inputSchema: {
-        miner: z.string().describe("Miner id or slug."),
+        miner: z.string().describe("Miner slug (preferred) or id."),
         ...askShape,
         ...payShape,
         endpoint: z.string().optional().describe("Direct call: the miner's endpoint path, e.g. /query (telegraph_find_miners lists them)."),
@@ -164,8 +175,8 @@ export function registerTools(server: McpServer, cfg: Config): Payer | undefined
     guard(async (a) => {
       if (!api && !payer) return fail(NO_KEY);
       const body = a.endpoint ? { method: a.method || "GET", endpoint: a.endpoint, payload: a.payload || {} } : askBody(a);
-      // The node's direct-call form finds a miner by id only, so a slug is looked up first.
-      const id = String((await miners().catch(() => [] as any[])).find((m) => m.slug === a.miner)?.id ?? a.miner);
+      // The slug always names one miner; an id can be refused as ambiguous (409). Id only for the direct form, which takes no slug.
+      const id = minerKey(a.miner, await miners().catch(() => [] as any[]), !!a.endpoint);
       if (api) return keyEngineAnswer(await api.askMiner(id, { ...body, ...payBody(a as { payment?: KeyPayment }) }));
       return answer(await payer!.post(`/engine/v1/ask/${encodeURIComponent(id)}`, body), true);
     }),
