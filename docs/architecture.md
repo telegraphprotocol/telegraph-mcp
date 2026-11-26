@@ -6,7 +6,7 @@ One stdio MCP server, one node URL, nine fixed tools.
 
 - Free tools read the node's public routes: `/engine/v1/intents`, `/engine/v1/intents/:name`, `/engine/v1/miners`, `/api/miners?intent=`, `/leaderboard/miners`, `/api/epoch`. The intent and miner lists are cached for 5 minutes.
 - With an API key, asks go to the Anjoman API instead and the account pays: `telegraph_ask` to `/agent/chat`, `telegraph_ask_auto` to `/engine/ask` (the backend adds `max_budget_usdc` 260000) and `telegraph_ask_miner` to `/engine/ask/:miner`.
-- `telegraph_ask` posts to `/engine/v1/ask` with `max_budget_usdc` (`TELEGRAPH_MAX_BUDGET_USDC`, capped by `TELEGRAPH_MAX_ASK_USD`); `telegraph_ask_miner` posts to `/engine/v1/ask/:miner` (canonical body, or the native `{method, endpoint, payload}` body), with no budget.
+- `telegraph_ask` posts to `/engine/v1/ask` with `max_budget_usdc` (`TELEGRAPH_MAX_BUDGET_USDC`, capped by `TELEGRAPH_MAX_ASK_USD`); `telegraph_ask_miner` posts to `/engine/v1/ask/:miner` (canonical body, or the native `{method, endpoint, payload}` body), with no budget. `:miner` is the slug whenever one is known (an id can be refused as ambiguous); the native body takes an id only, so a slug is turned into its id there.
 - `telegraph_account` reads the escrow balance from the node's `/v1/ledger/account/:address` and the wallet's USDC and ETH from the chain. `telegraph_deposit` and `fund` call `depositUSDC` on the diamond; `withdraw` calls `requestWithdraw`, then sends the node's `/v1/ledger/proof/:address` calldata (`executeWithdraw` or `executeWithdrawFallback` only).
 
 ## Paying (src/pay.ts)

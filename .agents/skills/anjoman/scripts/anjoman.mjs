@@ -23,7 +23,7 @@ import { createInterface } from "node:readline";
 import { pathToFileURL } from "node:url";
 
 const DEFAULT_URL = "https://backend.telegraphprotocol.com";
-/** The Telegraph node, read only to find a miner's id from its slug for a miner call. */
+/** The Telegraph node, read only to match a miner's slug and id for a miner call. */
 const DEFAULT_NODE_URL = "https://devnode.telegraphprotocol.com";
 /** An auto-routed ask or a miner call answers in one reply: the node's own deadline is 60 seconds, plus payment. */
 const ENGINE_WAIT_MS = 120_000;
@@ -425,13 +425,18 @@ function canonicalBody(question, flags) {
   return { ...(question && { query: question }), ...(intent && { intent }), ...(params && { params }) };
 }
 
-/** The node's miner call finds a miner by id, so a slug is looked up on the node first; unknown, it is sent as given. */
-async function minerId(miner) {
-  if (/^\d+$/.test(miner)) return miner;
+/** The question form takes a slug or an id, so a slug is sent whenever it is known (given, or listed for the id given), since an id can be refused as ambiguous (409). The endpoint form finds a miner by id only, so there a slug is turned into its id. Unknown or unreachable, it is sent as given. */
+async function minerKey(miner, direct) {
+  const numeric = /^\d+$/.test(miner);
+  if (numeric && direct) return miner;
   try {
     const res = await fetch(`${nodeUrl()}/engine/v1/miners`, { signal: AbortSignal.timeout(15_000) });
-    const found = ((await res.json()).miners || []).find((m) => m.slug === miner);
-    return found ? String(found.id) : miner;
+    const listed = (await res.json()).miners || [];
+    const bySlug = listed.find((m) => m.slug === miner);
+    if (direct) return bySlug ? String(bySlug.id) : miner;
+    if (bySlug || !numeric) return miner;
+    const byId = listed.find((m) => String(m.id) === miner);
+    return byId?.slug ? String(byId.slug) : miner;
   } catch {
     return miner;
   }
@@ -455,7 +460,7 @@ async function miner(args) {
   } else {
     body = canonicalBody(question, flags);
   }
-  const id = await minerId(who);
+  const id = await minerKey(who, !!flags.endpoint);
   body = { ...body, ...paymentFields(flags.pay) };
   printEngine(await api("POST", `/engine/ask/${encodeURIComponent(id)}`, body, { signal: AbortSignal.timeout(ENGINE_WAIT_MS) }), "miner call", flags.json);
 }
