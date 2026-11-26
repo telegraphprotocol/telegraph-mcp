@@ -40,7 +40,7 @@ before(async () => {
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, body: body ? JSON.parse(body) : undefined });
-      // The node's public miner list, read without a key to find a slug's id.
+      // The node's public miner list, read without a key to match a slug and an id.
       if (req.url === "/engine/v1/miners") {
         res.writeHead(200, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ miners: [{ id: 377, slug: "crypto-kraken", name: "Kraken Spot Price" }] }));
@@ -301,14 +301,19 @@ test("auto takes an exact intent with params, and flags a partial answer with wh
   assert.match(r.stdout, /Missing: volume_24h/);
 });
 
-test("miner sends a miner call to one miner, finding a slug's id first, with a question or the miner's own endpoint", async () => {
+test("miner sends the slug for a question and the id for the miner's own endpoint, looking up whichever is missing", async () => {
   scenario = "complete";
   const q = await run(["miner", "crypto-kraken", "BTC price"], { ANJOMAN_NODE_URL: base });
   assert.equal(q.code, 0, q.stderr);
-  assert.deepEqual(lastEngine(), { method: "POST", url: "/engine/ask/377", auth: "Bearer anjoman_test_key", body: { query: "BTC price" } });
+  assert.deepEqual(lastEngine(), { method: "POST", url: "/engine/ask/crypto-kraken", auth: "Bearer anjoman_test_key", body: { query: "BTC price" } });
   assert.match(q.stdout, /— Anjoman · miner call —/);
   assert.match(q.stdout, /Miner: Kraken Spot Price \(id 377\)/);
+  await run(["miner", "377", "BTC price"], { ANJOMAN_NODE_URL: base });
+  assert.equal(lastEngine().url, "/engine/ask/crypto-kraken");
+  await run(["miner", "crypto-kraken", "--endpoint", "/price"], { ANJOMAN_NODE_URL: base });
+  assert.equal(lastEngine().url, "/engine/ask/377");
   await run(["miner", "377", "--endpoint", "/price", "--method", "GET", "--payload", '{"s":"BTC"}'], { ANJOMAN_NODE_URL: base });
+  assert.equal(lastEngine().url, "/engine/ask/377");
   assert.deepEqual(lastEngine().body, { method: "GET", endpoint: "/price", payload: { s: "BTC" } });
 });
 
